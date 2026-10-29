@@ -94,14 +94,17 @@ function setStoredItem(key: string, value: string): void {
   } catch {}
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
-  workspaces: [],
-  activeWorkspaceId: 'ws-default-company',
-  environments: [],
-  activeEnvironmentId: 'env-development',
-  collections: [],
-  history: [],
-  tabs: [
+function getInitialTabs(): TabItem[] {
+  const saved = getStoredItem('internalapi_tabs', '');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((t) => ({ ...t, isLoading: false }));
+      }
+    } catch {}
+  }
+  return [
     {
       id: 'tab-1',
       name: 'Untitled Request',
@@ -109,8 +112,43 @@ export const useAppStore = create<AppState>((set, get) => ({
       isDirty: false,
       isLoading: false,
     },
-  ],
-  activeTabId: 'tab-1',
+  ];
+}
+
+function getInitialCollections(): Collection[] {
+  const saved = getStoredItem('internalapi_collections', '');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return [];
+}
+
+function getInitialEnvironments(): Environment[] {
+  const saved = getStoredItem('internalapi_environments', '');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+  return [];
+}
+
+const initialTabs = getInitialTabs();
+const initialActiveTabId = getStoredItem('internalapi_active_tab_id', initialTabs[0]?.id || 'tab-1');
+
+export const useAppStore = create<AppState>((set, get) => ({
+  workspaces: [],
+  activeWorkspaceId: 'ws-default-company',
+  environments: getInitialEnvironments(),
+  activeEnvironmentId: 'env-development',
+  collections: getInitialCollections(),
+  history: [],
+  tabs: initialTabs,
+  activeTabId: initialActiveTabId,
   isCommandPaletteOpen: false,
   isEnvModalOpen: false,
   isImportModalOpen: false,
@@ -140,16 +178,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadInitialData: async () => {
     try {
       const [wsRes, envRes, colRes, histRes] = await Promise.all([
-        fetch('/api/workspaces').then((r) => r.json()),
-        fetch('/api/environments').then((r) => r.json()),
-        fetch('/api/collections').then((r) => r.json()),
-        fetch('/api/history').then((r) => r.json()),
+        fetch('/api/workspaces').then((r) => r.json()).catch(() => []),
+        fetch('/api/environments').then((r) => r.json()).catch(() => []),
+        fetch('/api/collections').then((r) => r.json()).catch(() => []),
+        fetch('/api/history').then((r) => r.json()).catch(() => []),
       ]);
 
       const workspaces = Array.isArray(wsRes) ? wsRes : [];
-      const environments = Array.isArray(envRes) ? envRes : [];
-      const collections = Array.isArray(colRes) ? colRes : [];
+      const fetchedEnvs = Array.isArray(envRes) ? envRes : [];
+      const fetchedCols = Array.isArray(colRes) ? colRes : [];
       const history = Array.isArray(histRes) ? histRes : [];
+
+      const environments = fetchedEnvs.length > 0 ? fetchedEnvs : get().environments;
+      const collections = fetchedCols.length > 0 ? fetchedCols : get().collections;
 
       set({
         workspaces,
@@ -158,6 +199,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         history,
         activeEnvironmentId: environments.length > 0 ? environments[0].id : null,
       });
+
+      setStoredItem('internalapi_collections', JSON.stringify(collections));
+      setStoredItem('internalapi_environments', JSON.stringify(environments));
     } catch (e) {
       console.error('Failed to load initial data:', e);
     }
@@ -173,6 +217,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const existing = tabs.find((t) => t.id === tabId);
     if (existing) {
       set({ activeTabId: tabId });
+      setStoredItem('internalapi_active_tab_id', tabId);
       return;
     }
 
@@ -181,36 +226,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...partialRequest,
     };
 
+    const nextTabs: TabItem[] = [
+      ...tabs,
+      {
+        id: tabId,
+        name: newReq.name || 'Untitled Request',
+        request: newReq,
+        isDirty: false,
+        isLoading: false,
+      },
+    ];
+
     set({
-      tabs: [
-        ...tabs,
-        {
-          id: tabId,
-          name: newReq.name || 'Untitled Request',
-          request: newReq,
-          isDirty: false,
-          isLoading: false,
-        },
-      ],
+      tabs: nextTabs,
       activeTabId: tabId,
     });
+    setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
+    setStoredItem('internalapi_active_tab_id', tabId);
   },
 
   closeTab: (tabId) => {
     const { tabs, activeTabId } = get();
     if (tabs.length === 1) {
-      // Keep at least one empty tab
-      set({
-        tabs: [
-          {
-            id: `tab-${Date.now()}`,
-            name: 'Untitled Request',
-            request: { ...DEFAULT_NEW_REQUEST },
-            isDirty: false,
-            isLoading: false,
-          },
-        ],
-      });
+      const resetTabs = [
+        {
+          id: `tab-${Date.now()}`,
+          name: 'Untitled Request',
+          request: { ...DEFAULT_NEW_REQUEST },
+          isDirty: false,
+          isLoading: false,
+        },
+      ];
+      set({ tabs: resetTabs, activeTabId: resetTabs[0].id });
+      setStoredItem('internalapi_tabs', JSON.stringify(resetTabs));
+      setStoredItem('internalapi_active_tab_id', resetTabs[0].id);
       return;
     }
 
@@ -222,26 +271,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     set({ tabs: filtered, activeTabId: nextActive });
+    setStoredItem('internalapi_tabs', JSON.stringify(filtered));
+    setStoredItem('internalapi_active_tab_id', nextActive);
   },
 
-  setActiveTabId: (tabId) => set({ activeTabId: tabId }),
+  setActiveTabId: (tabId) => {
+    set({ activeTabId: tabId });
+    setStoredItem('internalapi_active_tab_id', tabId);
+  },
 
   updateActiveRequest: (updater) => {
     const { tabs, activeTabId } = get();
-    set({
-      tabs: tabs.map((tab) => {
-        if (tab.id === activeTabId) {
-          const updated = updater(tab.request);
-          return {
-            ...tab,
-            request: updated,
-            name: updated.name,
-            isDirty: true,
-          };
-        }
-        return tab;
-      }),
+    const updatedTabs = tabs.map((tab) => {
+      if (tab.id === activeTabId) {
+        const updated = updater(tab.request);
+        return {
+          ...tab,
+          request: updated,
+          name: updated.name,
+          isDirty: true,
+        };
+      }
+      return tab;
     });
+
+    set({ tabs: updatedTabs });
+    setStoredItem('internalapi_tabs', JSON.stringify(updatedTabs));
   },
 
   sendRequest: async (targetTabId) => {
@@ -439,12 +494,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     const saved = await res.json();
 
-    set((state) => ({
-      collections: state.collections.map((c) => (c.id === saved.id ? saved : c)),
-      tabs: state.tabs.map((t) =>
-        t.id === activeTabId ? { ...t, request: savedReq, isDirty: false } : t
-      ),
-    }));
+    const nextCollections = collections.map((c) => (c.id === saved.id ? saved : c));
+    const nextTabs = tabs.map((t) =>
+      t.id === activeTabId ? { ...t, request: savedReq, isDirty: false } : t
+    );
+
+    set({ collections: nextCollections, tabs: nextTabs });
+    setStoredItem('internalapi_collections', JSON.stringify(nextCollections));
+    setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
   },
 
   saveEnvironment: async (env) => {
@@ -454,21 +511,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       body: JSON.stringify(env),
     });
     const saved = await res.json();
-    set((state) => {
-      const idx = state.environments.findIndex((e) => e.id === saved.id);
-      const next = [...state.environments];
-      if (idx >= 0) next[idx] = saved;
-      else next.push(saved);
-      return { environments: next };
-    });
+    const currentEnvs = get().environments;
+    const idx = currentEnvs.findIndex((e) => e.id === saved.id);
+    const next = [...currentEnvs];
+    if (idx >= 0) next[idx] = saved;
+    else next.push(saved);
+
+    set({ environments: next });
+    setStoredItem('internalapi_environments', JSON.stringify(next));
   },
 
   deleteEnvironment: async (id) => {
     await fetch(`/api/environments/${id}`, { method: 'DELETE' });
-    set((state) => ({
-      environments: state.environments.filter((e) => e.id !== id),
-      activeEnvironmentId: state.activeEnvironmentId === id ? null : state.activeEnvironmentId,
-    }));
+    const next = get().environments.filter((e) => e.id !== id);
+    set({
+      environments: next,
+      activeEnvironmentId: get().activeEnvironmentId === id ? null : get().activeEnvironmentId,
+    });
+    setStoredItem('internalapi_environments', JSON.stringify(next));
   },
 
   createCollection: async (name) => {
@@ -487,14 +547,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       body: JSON.stringify(newCol),
     });
     const saved = await res.json();
-    set((state) => ({ collections: [...state.collections, saved] }));
+    const next = [...get().collections, saved];
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
   },
 
   deleteCollection: async (id) => {
     await fetch(`/api/collections/${id}`, { method: 'DELETE' });
-    set((state) => ({
-      collections: state.collections.filter((c) => c.id !== id),
-    }));
+    const next = get().collections.filter((c) => c.id !== id);
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
   },
 
   refreshHistory: async () => {

@@ -55,9 +55,15 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
           body: JSON.stringify(converted),
         });
         const saved = await res.json();
-        useAppStore.setState((state) => ({
-          collections: [...state.collections, saved],
-        }));
+        useAppStore.setState((state) => {
+          const next = [...state.collections, saved];
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem('internalapi_collections', JSON.stringify(next));
+            }
+          } catch {}
+          return { collections: next };
+        });
         setSuccessMsg(`Collection "${saved.name}" imported with ${saved.folders?.length || 0} folders and ${saved.requests?.length || 0} requests!`);
         setTimeout(() => onClose(), 1500);
         return;
@@ -76,9 +82,15 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
           body: JSON.stringify(col),
         });
         const saved = await res.json();
-        useAppStore.setState((state) => ({
-          collections: [...state.collections, saved],
-        }));
+        useAppStore.setState((state) => {
+          const next = [...state.collections, saved];
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem('internalapi_collections', JSON.stringify(next));
+            }
+          } catch {}
+          return { collections: next };
+        });
         setSuccessMsg(`Collection "${saved.name}" imported successfully!`);
         setTimeout(() => onClose(), 1500);
         return;

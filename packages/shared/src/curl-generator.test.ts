@@ -21,3 +21,4 @@ describe('cURL Generator', () => {
     expect(curl).toContain("--data-raw '{\"name\":\"Alice\"}'");
   });
 });
+

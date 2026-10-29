@@ -115,7 +115,7 @@
                 }
               },
               "bodyType": "json",
-              "bodyContent": "{\n  \"message\": \"Hello from InternalAPI Postman clone!\",\n  \"service\": \"billing-service\",\n  \"timestamp\": \"2026-10-29T20:39:28.905Z\"\n}"
+              "bodyContent": "{\n  \"message\": \"Hello from InternalAPI Postman clone!\",\n  \"service\": \"billing-service\",\n  \"timestamp\": \"2026-10-29T20:49:23.024Z\"\n}"
             }
           ]
         }
@@ -124,6 +124,36 @@
     }
   ],
   "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 549,
+      "id": "hist-7d779f85-0797-45be-9db3-fc88cf41a4c3",
+      "createdAt": "2026-10-29T20:49:23.765Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3100,
+      "time": 758,
+      "id": "hist-d5f729e4-48d6-46be-b3d1-f031967a2fa7",
+      "createdAt": "2026-10-29T20:48:22.545Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3109,
+      "time": 720,
+      "id": "hist-af0af266-8414-4be0-8545-1401b1415149",
+      "createdAt": "2026-10-29T20:48:12.359Z"
+    },
     {
       "workspaceId": "ws-default-company",
       "method": "GET",

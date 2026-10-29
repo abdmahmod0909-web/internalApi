@@ -28,8 +28,33 @@ export interface StorageData {
 }
 
 const DEFAULT_WORKSPACE_ID = 'ws-default-company';
-const DATA_DIR = path.resolve(process.cwd(), '.data');
-const DATA_FILE = path.join(DATA_DIR, 'store.json');
+
+function getDataFilePath(): { dataDir: string; dataFile: string } {
+  // Check packages/server/.data/store.json first
+  const serverPath = path.resolve(process.cwd(), 'packages/server/.data');
+  if (fs.existsSync(path.join(serverPath, 'store.json'))) {
+    return { dataDir: serverPath, dataFile: path.join(serverPath, 'store.json') };
+  }
+  // Check local .data/store.json
+  const cwdPath = path.resolve(process.cwd(), '.data');
+  if (fs.existsSync(path.join(cwdPath, 'store.json'))) {
+    return { dataDir: cwdPath, dataFile: path.join(cwdPath, 'store.json') };
+  }
+  // Check parent ../.data/store.json
+  const parentPath = path.resolve(process.cwd(), '../.data');
+  if (fs.existsSync(path.join(parentPath, 'store.json'))) {
+    return { dataDir: parentPath, dataFile: path.join(parentPath, 'store.json') };
+  }
+
+  // Default to packages/server/.data
+  const rootDir = fs.existsSync(path.resolve(process.cwd(), 'packages/server'))
+    ? path.resolve(process.cwd(), 'packages/server')
+    : process.cwd();
+  const dir = path.join(rootDir, '.data');
+  return { dataDir: dir, dataFile: path.join(dir, 'store.json') };
+}
+
+const { dataDir: DATA_DIR, dataFile: DATA_FILE } = getDataFilePath();
 
 const INITIAL_DEMO_DATA: StorageData = {
   workspaces: [
