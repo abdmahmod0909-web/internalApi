@@ -1,0 +1,587 @@
+import React, { useState } from 'react';
+import { useAppStore } from '../../store/useAppStore.js';
+import { KeyValueEditor } from './KeyValueEditor.js';
+import { Play, Save, Loader2, Sparkles, Key } from 'lucide-react';
+import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
+
+const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+export const RequestBuilder: React.FC = () => {
+  const [activeSubTab, setActiveSubTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'settings'>('params');
+  const [isFetchingToken, setIsFetchingToken] = useState(false);
+
+  const { tabs, activeTabId, updateActiveRequest, sendRequest, saveCurrentRequest } = useAppStore();
+  const currentTab = tabs.find((t) => t.id === activeTabId);
+
+  if (!currentTab) {
+    return <div className="p-8 text-center text-gray-500">No active request tab.</div>;
+  }
+
+  const req = currentTab.request;
+
+  // Auto-sync query params into URL string
+  const handleQueryParamsChange = (items: any[]) => {
+    updateActiveRequest((prev) => {
+      let urlBase = prev.url.split('?')[0];
+      const enabled = items.filter((i) => i.isEnabled && i.key);
+      let newUrl = urlBase;
+      if (enabled.length > 0) {
+        const search = enabled.map((i) => `${encodeURIComponent(i.key)}=${encodeURIComponent(i.value || '')}`).join('&');
+        newUrl = `${urlBase}?${search}`;
+      }
+      return { ...prev, queryParams: items, url: newUrl };
+    });
+  };
+
+  // Prettify JSON body
+  const handlePrettifyJson = () => {
+    try {
+      if (req.bodyContent) {
+        const parsed = JSON.parse(req.bodyContent);
+        updateActiveRequest((prev) => ({
+          ...prev,
+          bodyContent: JSON.stringify(parsed, null, 2),
+        }));
+      }
+    } catch {
+      alert('Invalid JSON content');
+    }
+  };
+
+  // Fetch OAuth 2.0 Token
+  const handleFetchOAuthToken = async () => {
+    if (!req.auth?.oauth2?.tokenUrl) {
+      alert('Please enter Token URL');
+      return;
+    }
+    setIsFetchingToken(true);
+    try {
+      const res = await fetch('/api/proxy/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.auth.oauth2),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Token request failed');
+
+      updateActiveRequest((prev) => ({
+        ...prev,
+        auth: {
+          ...prev.auth,
+          oauth2: {
+            ...prev.auth?.oauth2!,
+            accessToken: data.access_token,
+          },
+        },
+      }));
+      alert('Access Token acquired successfully!');
+    } catch (err: any) {
+      alert(err.message || 'Failed to fetch OAuth token');
+    } finally {
+      setIsFetchingToken(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950 border-r border-gray-800">
+      {/* Top Bar: Method + URL + Send + Save */}
+      <div className="p-3 border-b border-gray-800 flex items-center space-x-2">
+        <select
+          value={req.method}
+          onChange={(e) =>
+            updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
+          }
+          className="bg-gray-900 border border-gray-700 font-bold text-xs rounded px-2.5 py-2 text-orange-400 outline-none cursor-pointer"
+        >
+          {HTTP_METHODS.map((m) => (
+            <option key={m} value={m} className="bg-gray-900 text-gray-200">
+              {m}
+            </option>
+          ))}
+        </select>
+
+        {/* URL Input */}
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            placeholder="https://api.company.com/v1/resource or {{base_url}}/users"
+            value={req.url}
+            onChange={(e) =>
+              updateActiveRequest((prev) => ({ ...prev, url: e.target.value }))
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                sendRequest();
+              }
+            }}
+            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-gray-100 placeholder-gray-500 font-mono outline-none focus:border-orange-500 transition-colors"
+          />
+        </div>
+
+        {/* Send Button */}
+        <button
+          onClick={() => sendRequest()}
+          disabled={currentTab.isLoading}
+          className="flex items-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
+        >
+          {currentTab.isLoading ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Play className="w-3.5 h-3.5 fill-current" />
+          )}
+          <span>Send</span>
+        </button>
+
+        {/* Save Button */}
+        <button
+          onClick={() => saveCurrentRequest()}
+          className="flex items-center space-x-1 bg-gray-800 hover:bg-gray-750 text-gray-300 text-xs px-3 py-2 rounded border border-gray-700 transition-colors"
+          title="Save Request"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>Save</span>
+        </button>
+      </div>
+
+      {/* Sub Tabs Bar */}
+      <div className="flex border-b border-gray-800 text-xs font-medium text-gray-400 px-3 bg-gray-950">
+        {[
+          { key: 'params', label: `Params ${req.queryParams?.filter((p) => p.isEnabled && p.key).length ? `(${req.queryParams.filter((p) => p.isEnabled && p.key).length})` : ''}` },
+          { key: 'auth', label: `Auth ${req.auth?.type !== 'none' ? '•' : ''}` },
+          { key: 'headers', label: `Headers ${req.headers?.filter((h) => h.isEnabled && h.key).length ? `(${req.headers.filter((h) => h.isEnabled && h.key).length})` : ''}` },
+          { key: 'body', label: `Body ${req.bodyType !== 'none' ? '•' : ''}` },
+          { key: 'settings', label: 'Settings' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveSubTab(tab.key as any)}
+            className={`py-2 px-3 border-b-2 transition-colors ${
+              activeSubTab === tab.key
+                ? 'border-orange-500 text-orange-500'
+                : 'border-transparent hover:text-gray-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Sub Tab Content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeSubTab === 'params' && (
+          <div className="p-3">
+            <h3 className="text-xs font-semibold text-gray-400 mb-2">Query Parameters</h3>
+            <KeyValueEditor
+              items={req.queryParams || []}
+              onChange={handleQueryParamsChange}
+              keyPlaceholder="Parameter"
+              valuePlaceholder="Value"
+            />
+          </div>
+        )}
+
+        {activeSubTab === 'auth' && (
+          <div className="p-4 space-y-4 max-w-lg text-xs">
+            <div>
+              <label className="block text-gray-400 mb-1 font-medium">Type</label>
+              <select
+                value={req.auth?.type || 'none'}
+                onChange={(e) =>
+                  updateActiveRequest((prev) => ({
+                    ...prev,
+                    auth: { ...prev.auth, type: e.target.value as AuthType },
+                  }))
+                }
+                className="bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-gray-200 outline-none w-full"
+              >
+                <option value="none">No Auth</option>
+                <option value="bearer">Bearer Token</option>
+                <option value="basic">Basic Auth</option>
+                <option value="apikey">API Key</option>
+                <option value="oauth2">OAuth 2.0 (Client Credentials)</option>
+                <option value="custom">Custom Header</option>
+              </select>
+            </div>
+
+            {req.auth?.type === 'bearer' && (
+              <div>
+                <label className="block text-gray-400 mb-1">Token</label>
+                <input
+                  type="text"
+                  placeholder="Bearer token or {{token}}"
+                  value={req.auth.bearer?.token || ''}
+                  onChange={(e) =>
+                    updateActiveRequest((prev) => ({
+                      ...prev,
+                      auth: {
+                        ...prev.auth,
+                        bearer: { token: e.target.value },
+                      },
+                    }))
+                  }
+                  className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 font-mono outline-none"
+                />
+              </div>
+            )}
+
+            {req.auth?.type === 'basic' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-gray-400 mb-1">Username</label>
+                  <input
+                    type="text"
+                    value={req.auth.basic?.username || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          basic: { username: e.target.value, password: prev.auth.basic?.password || '' },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={req.auth.basic?.password || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          basic: { username: prev.auth.basic?.username || '', password: e.target.value },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {req.auth?.type === 'apikey' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-gray-400 mb-1">Key</label>
+                  <input
+                    type="text"
+                    placeholder="X-API-Key"
+                    value={req.auth.apiKey?.key || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          apiKey: {
+                            key: e.target.value,
+                            value: prev.auth.apiKey?.value || '',
+                            addTo: prev.auth.apiKey?.addTo || 'header',
+                          },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Value</label>
+                  <input
+                    type="text"
+                    placeholder="api_key_secret_value"
+                    value={req.auth.apiKey?.value || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          apiKey: {
+                            key: prev.auth.apiKey?.key || '',
+                            value: e.target.value,
+                            addTo: prev.auth.apiKey?.addTo || 'header',
+                          },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 font-mono outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Add To</label>
+                  <select
+                    value={req.auth.apiKey?.addTo || 'header'}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          apiKey: {
+                            key: prev.auth.apiKey?.key || '',
+                            value: prev.auth.apiKey?.value || '',
+                            addTo: e.target.value as 'header' | 'query',
+                          },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-gray-200 outline-none"
+                  >
+                    <option value="header">Header</option>
+                    <option value="query">Query Params</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {req.auth?.type === 'oauth2' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-gray-400 mb-1">Token URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://auth.company.com/oauth/token"
+                    value={req.auth.oauth2?.tokenUrl || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          oauth2: {
+                            ...prev.auth.oauth2!,
+                            tokenUrl: e.target.value,
+                            grantType: 'client_credentials',
+                          },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Client ID</label>
+                  <input
+                    type="text"
+                    value={req.auth.oauth2?.clientId || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          oauth2: { ...prev.auth.oauth2!, clientId: e.target.value },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Client Secret</label>
+                  <input
+                    type="password"
+                    value={req.auth.oauth2?.clientSecret || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          oauth2: { ...prev.auth.oauth2!, clientSecret: e.target.value },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 mb-1">Scope (Optional)</label>
+                  <input
+                    type="text"
+                    value={req.auth.oauth2?.scope || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          oauth2: { ...prev.auth.oauth2!, scope: e.target.value },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                  />
+                </div>
+                <div className="pt-2">
+                  <button
+                    onClick={handleFetchOAuthToken}
+                    disabled={isFetchingToken}
+                    className="flex items-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-3 py-1.5 rounded font-medium"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    <span>{isFetchingToken ? 'Acquiring...' : 'Get New Access Token'}</span>
+                  </button>
+                </div>
+                {req.auth.oauth2?.accessToken && (
+                  <div className="p-2 bg-emerald-950/40 border border-emerald-800/60 rounded text-[11px] text-emerald-300">
+                    Active Access Token available and attached.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeSubTab === 'headers' && (
+          <div className="p-3">
+            <h3 className="text-xs font-semibold text-gray-400 mb-2">Request Headers</h3>
+            <KeyValueEditor
+              items={req.headers || []}
+              onChange={(items) => updateActiveRequest((prev) => ({ ...prev, headers: items }))}
+              keyPlaceholder="Header"
+              valuePlaceholder="Value"
+            />
+          </div>
+        )}
+
+        {activeSubTab === 'body' && (
+          <div className="p-3 flex flex-col h-full">
+            {/* Body Type Selectors */}
+            <div className="flex items-center space-x-4 mb-3 text-xs">
+              {(['none', 'json', 'raw', 'form-data', 'x-www-form-urlencoded', 'graphql'] as BodyType[]).map((type) => (
+                <label key={type} className="flex items-center space-x-1.5 text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="bodyType"
+                    checked={req.bodyType === type}
+                    onChange={() => updateActiveRequest((prev) => ({ ...prev, bodyType: type }))}
+                    className="text-orange-500 focus:ring-0"
+                  />
+                  <span>{type}</span>
+                </label>
+              ))}
+
+              {req.bodyType === 'json' && (
+                <button
+                  onClick={handlePrettifyJson}
+                  className="flex items-center space-x-1 ml-auto text-orange-400 hover:text-orange-300 text-xs px-2 py-0.5 rounded bg-gray-900 border border-gray-800"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Prettify JSON</span>
+                </button>
+              )}
+            </div>
+
+            {/* Body Editors */}
+            {req.bodyType === 'none' && (
+              <div className="text-center py-12 text-xs text-gray-500">
+                This request does not have a body.
+              </div>
+            )}
+
+            {(req.bodyType === 'json' || req.bodyType === 'raw') && (
+              <div className="flex-1 min-h-[220px]">
+                <textarea
+                  value={req.bodyContent || ''}
+                  onChange={(e) => updateActiveRequest((prev) => ({ ...prev, bodyContent: e.target.value }))}
+                  placeholder={req.bodyType === 'json' ? '{\n  "key": "value"\n}' : 'Raw text content'}
+                  className="w-full h-full min-h-[220px] bg-gray-900 border border-gray-800 rounded p-3 text-xs text-gray-100 font-mono outline-none focus:border-gray-700 resize-y"
+                />
+              </div>
+            )}
+
+            {req.bodyType === 'x-www-form-urlencoded' && (
+              <KeyValueEditor
+                items={req.bodyUrlEncoded || []}
+                onChange={(items) => updateActiveRequest((prev) => ({ ...prev, bodyUrlEncoded: items }))}
+                keyPlaceholder="Key"
+                valuePlaceholder="Value"
+              />
+            )}
+
+            {req.bodyType === 'graphql' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Query</label>
+                  <textarea
+                    rows={8}
+                    value={req.bodyGraphQL?.query || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        bodyGraphQL: { ...prev.bodyGraphQL, query: e.target.value },
+                      }))
+                    }
+                    placeholder="query {\n  user {\n    id\n    name\n  }\n}"
+                    className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-xs text-gray-100 font-mono outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">GraphQL Variables (JSON)</label>
+                  <textarea
+                    rows={3}
+                    value={req.bodyGraphQL?.variables || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        bodyGraphQL: { ...prev.bodyGraphQL, query: prev.bodyGraphQL?.query || '', variables: e.target.value },
+                      }))
+                    }
+                    placeholder='{ "limit": 10 }'
+                    className="w-full bg-gray-900 border border-gray-800 rounded p-3 text-xs text-gray-100 font-mono outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeSubTab === 'settings' && (
+          <div className="p-4 space-y-4 max-w-md text-xs">
+            <div>
+              <label className="block text-gray-400 mb-1">Request Timeout (ms)</label>
+              <input
+                type="number"
+                value={req.settings?.timeoutMs ?? 30000}
+                onChange={(e) =>
+                  updateActiveRequest((prev) => ({
+                    ...prev,
+                    settings: { ...prev.settings, timeoutMs: parseInt(e.target.value, 10) || 30000 },
+                  }))
+                }
+                className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+              />
+            </div>
+            <label className="flex items-center space-x-2 text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={req.settings?.followRedirects ?? true}
+                onChange={(e) =>
+                  updateActiveRequest((prev) => ({
+                    ...prev,
+                    settings: { ...prev.settings, followRedirects: e.target.checked },
+                  }))
+                }
+                className="rounded bg-gray-800 border-gray-700 text-orange-500 focus:ring-0"
+              />
+              <span>Follow HTTP Redirects</span>
+            </label>
+            <label className="flex items-center space-x-2 text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={req.settings?.verifySsl ?? true}
+                onChange={(e) =>
+                  updateActiveRequest((prev) => ({
+                    ...prev,
+                    settings: { ...prev.settings, verifySsl: e.target.checked },
+                  }))
+                }
+                className="rounded bg-gray-800 border-gray-700 text-orange-500 focus:ring-0"
+              />
+              <span>Verify SSL / TLS Certificates (Turn off for self-signed certs)</span>
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+

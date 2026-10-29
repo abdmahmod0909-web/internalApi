@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: internalapi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: internalapi
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: internalapi-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://postgres:postgrespassword@db:5432/internalapi?schema=public"
+      INTERNALAPI_SECRET_KEY: "change-this-to-a-secure-random-32-char-key"
+      JWT_SECRET: "change-this-jwt-secret-in-production"
+      SSRF_ALLOW_INTERNAL: "true"
+    volumes:
+      - app_data:/app/.data
+
+volumes:
+  postgres_data:
+  app_data:
+

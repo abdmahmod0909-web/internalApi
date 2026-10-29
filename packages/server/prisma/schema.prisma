@@ -1,0 +1,215 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum AuthType {
+  NONE
+  BEARER
+  BASIC
+  API_KEY
+  OAUTH2
+  CUSTOM
+}
+
+enum BodyType {
+  NONE
+  JSON
+  RAW
+  FORM_DATA
+  URL_ENCODED
+  GRAPHQL
+}
+
+model User {
+  id           String            @id @default(uuid())
+  email        String            @unique
+  name         String
+  passwordHash String?
+  avatarUrl    String?
+  role         UserRole          @default(EDITOR)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  memberships  WorkspaceMember[]
+  requests     RequestHistory[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id           String            @id @default(uuid())
+  name         String
+  description  String?
+  isDefault    Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  members      WorkspaceMember[]
+  collections  Collection[]
+  environments Environment[]
+  globalVars   GlobalVariable[]
+  history      RequestHistory[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        UserRole  @default(EDITOR)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Environment {
+  id          String                @id @default(uuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  workspace   Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  variables   EnvironmentVariable[]
+
+  @@map("environments")
+}
+
+model EnvironmentVariable {
+  id            String      @id @default(uuid())
+  environmentId String
+  key           String
+  value         String
+  initialValue  String?
+  isSecret      Boolean     @default(false)
+  isEnabled     Boolean     @default(true)
+  environment   Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentId, key])
+  @@map("environment_variables")
+}
+
+model GlobalVariable {
+  id          String    @id @default(uuid())
+  workspaceId String
+  key         String
+  value       String
+  isSecret    Boolean   @default(false)
+  isEnabled   Boolean   @default(true)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@map("global_variables")
+}
+
+model Collection {
+  id          String       @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  authConfig  Json?
+  variables   Json?
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  folders     Folder[]
+  requests    ApiRequest[]
+
+  @@map("collections")
+}
+
+model Folder {
+  id           String       @id @default(uuid())
+  collectionId String
+  parentId     String?
+  name         String
+  description  String?
+  sortOrder    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  collection   Collection   @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  parent       Folder?      @relation("SubFolders", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Folder[]     @relation("SubFolders")
+  requests     ApiRequest[]
+
+  @@map("folders")
+}
+
+model ApiRequest {
+  id           String     @id @default(uuid())
+  collectionId String
+  folderId     String?
+  name         String
+  method       String     @default("GET")
+  url          String
+  queryParams  Json
+  headers      Json
+  pathVars     Json?
+  authType     AuthType   @default(NONE)
+  authConfig   Json?
+  bodyType     BodyType   @default(NONE)
+  bodyContent  String?
+  bodyFormData Json?
+  preScript    String?
+  postScript   String?
+  settings     Json?
+  sortOrder    Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  folder       Folder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@map("api_requests")
+}
+
+model RequestHistory {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  userId       String
+  method       String
+  url          String
+  headers      Json
+  body         String?
+  responseCode Int
+  responseSize Int
+  responseTime Int
+  error        String?
+  createdAt    DateTime  @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("request_history")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+

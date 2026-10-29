@@ -1,0 +1,24 @@
+{
+  "name": "internalapi-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "InternalAPI - Enterprise Self-Hosted API Client",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  },
+  "keywords": [
+    "postman",
+    "api-client",
+    "internal-tools",
+    "self-hosted"
+  ],
+  "author": "InternalAPI Team",
+  "license": "MIT"
+}
+

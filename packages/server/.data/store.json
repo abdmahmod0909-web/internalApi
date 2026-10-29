@@ -1,0 +1,158 @@
+{
+  "workspaces": [
+    {
+      "id": "ws-default-company",
+      "name": "Company Internal APIs",
+      "description": "Default company workspace for internal and microservice testing",
+      "isDefault": true
+    }
+  ],
+  "environments": [
+    {
+      "id": "env-development",
+      "workspaceId": "ws-default-company",
+      "name": "Development",
+      "variables": [
+        {
+          "id": "v1",
+          "key": "base_url",
+          "value": "https://httpbin.org",
+          "isSecret": false,
+          "isEnabled": true
+        },
+        {
+          "id": "v2",
+          "key": "api_token",
+          "value": "5f37dbd57554e7b21fd074d3:20a332c682f89bc3eac20bddfe1dcc0d:c7c061b270e3c642ac9f009f57ab9770b8f36e2a8072c4cd",
+          "isSecret": true,
+          "isEnabled": true
+        }
+      ]
+    },
+    {
+      "id": "env-production",
+      "workspaceId": "ws-default-company",
+      "name": "Production",
+      "variables": [
+        {
+          "id": "v3",
+          "key": "base_url",
+          "value": "https://httpbin.org",
+          "isSecret": false,
+          "isEnabled": true
+        }
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "id": "col-getting-started",
+      "workspaceId": "ws-default-company",
+      "name": "Getting Started & Health Checks",
+      "description": "Sample collection demonstrating GET, POST, Auth, and variable resolution",
+      "sortOrder": 0,
+      "folders": [
+        {
+          "id": "fld-samples",
+          "collectionId": "col-getting-started",
+          "name": "Demo Endpoints",
+          "sortOrder": 0,
+          "requests": [
+            {
+              "id": "req-httpbin-get",
+              "collectionId": "col-getting-started",
+              "folderId": "fld-samples",
+              "name": "Sample GET Request",
+              "method": "GET",
+              "url": "{{base_url}}/get",
+              "queryParams": [
+                {
+                  "id": "q1",
+                  "key": "status",
+                  "value": "active",
+                  "isEnabled": true
+                },
+                {
+                  "id": "q2",
+                  "key": "filter",
+                  "value": "all",
+                  "isEnabled": false
+                }
+              ],
+              "headers": [
+                {
+                  "id": "h1",
+                  "key": "Accept",
+                  "value": "application/json",
+                  "isEnabled": true
+                }
+              ],
+              "auth": {
+                "type": "none"
+              },
+              "bodyType": "none"
+            },
+            {
+              "id": "req-httpbin-post",
+              "collectionId": "col-getting-started",
+              "folderId": "fld-samples",
+              "name": "Sample POST JSON",
+              "method": "POST",
+              "url": "{{base_url}}/post",
+              "queryParams": [],
+              "headers": [
+                {
+                  "id": "h2",
+                  "key": "Content-Type",
+                  "value": "application/json",
+                  "isEnabled": true
+                }
+              ],
+              "auth": {
+                "type": "bearer",
+                "bearer": {
+                  "token": "{{api_token}}"
+                }
+              },
+              "bodyType": "json",
+              "bodyContent": "{\n  \"message\": \"Hello from InternalAPI Postman clone!\",\n  \"service\": \"billing-service\",\n  \"timestamp\": \"2026-10-29T20:09:34.709Z\"\n}"
+            }
+          ]
+        }
+      ],
+      "requests": []
+    }
+  ],
+  "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 1357,
+      "id": "hist-4a0c23a1-1ea8-44cc-b92a-f471fc657554",
+      "createdAt": "2026-10-29T20:15:31.079Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 565,
+      "id": "hist-1a379de2-e25e-4d06-a790-b16e942fdeda",
+      "createdAt": "2026-10-29T20:14:50.484Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 573,
+      "id": "hist-e25b3c8f-88e5-4915-9c03-c23c22a8d6be",
+      "createdAt": "2026-10-29T20:09:35.482Z"
+    }
+  ]
+}

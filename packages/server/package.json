@@ -1,0 +1,38 @@
+{
+  "name": "@internalapi/server",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/multipart": "^8.2.0",
+    "@fastify/sensible": "^5.5.0",
+    "@fastify/static": "^7.0.4",
+    "@internalapi/shared": "*",
+    "@prisma/client": "^5.13.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.26.2",
+    "undici": "^6.16.1",
+    "zod": "^3.23.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "prisma": "^5.13.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}
+
