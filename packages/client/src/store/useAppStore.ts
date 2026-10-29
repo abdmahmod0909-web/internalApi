@@ -49,10 +49,18 @@ interface AppState {
   activeTabId: string;
   isCommandPaletteOpen: boolean;
   isEnvModalOpen: boolean;
+  isImportModalOpen: boolean;
+  theme: 'dark' | 'midnight' | 'light';
+  splitRatio: number;
+  layout: 'horizontal' | 'vertical';
 
   // Actions
   setCommandPaletteOpen: (open: boolean) => void;
   setEnvModalOpen: (open: boolean) => void;
+  setImportModalOpen: (open: boolean) => void;
+  setTheme: (theme: 'dark' | 'midnight' | 'light') => void;
+  setSplitRatio: (ratio: number) => void;
+  setLayout: (layout: 'horizontal' | 'vertical') => void;
   loadInitialData: () => Promise<void>;
   setActiveEnvironmentId: (id: string | null) => void;
   openTab: (request?: Partial<ApiRequestData>, customId?: string) => void;
@@ -67,6 +75,23 @@ interface AppState {
   deleteCollection: (id: string) => Promise<void>;
   refreshHistory: () => Promise<void>;
   clearHistory: () => Promise<void>;
+}
+
+function getStoredItem(key: string, fallback: string): string {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(key) || fallback;
+    }
+  } catch {}
+  return fallback;
+}
+
+function setStoredItem(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {}
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -88,9 +113,29 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeTabId: 'tab-1',
   isCommandPaletteOpen: false,
   isEnvModalOpen: false,
+  isImportModalOpen: false,
+  theme: (getStoredItem('internalapi_theme', 'dark') as any),
+  splitRatio: parseFloat(getStoredItem('internalapi_split_ratio', '50')),
+  layout: (getStoredItem('internalapi_layout', 'horizontal') as any),
 
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
   setEnvModalOpen: (open) => set({ isEnvModalOpen: open }),
+  setImportModalOpen: (open) => set({ isImportModalOpen: open }),
+  setTheme: (theme) => {
+    setStoredItem('internalapi_theme', theme);
+    if (typeof document !== 'undefined') {
+      document.documentElement.className = `theme-${theme}`;
+    }
+    set({ theme });
+  },
+  setSplitRatio: (ratio) => {
+    setStoredItem('internalapi_split_ratio', String(ratio));
+    set({ splitRatio: ratio });
+  },
+  setLayout: (layout) => {
+    setStoredItem('internalapi_layout', layout);
+    set({ layout });
+  },
 
   loadInitialData: async () => {
     try {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore.js';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Columns, Rows } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
 
 function getMethodBadgeColor(method: HttpMethod): string {
@@ -21,10 +21,10 @@ function getMethodBadgeColor(method: HttpMethod): string {
 }
 
 export const TabBar: React.FC = () => {
-  const { tabs, activeTabId, setActiveTabId, closeTab, openTab } = useAppStore();
+  const { tabs, activeTabId, setActiveTabId, closeTab, openTab, layout, setLayout } = useAppStore();
 
   return (
-    <div className="flex items-center bg-gray-950 border-b border-gray-800 px-2 overflow-x-auto select-none">
+    <div className="flex items-center justify-between bg-gray-950 border-b border-gray-800 px-2 overflow-x-auto select-none">
       <div className="flex items-center space-x-1">
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
@@ -59,13 +59,30 @@ export const TabBar: React.FC = () => {
         })}
       </div>
 
-      <button
-        onClick={() => openTab()}
-        className="p-1.5 ml-1 text-gray-500 hover:text-gray-200 hover:bg-gray-850 rounded transition-colors"
-        title="New Request Tab"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
+      <div className="flex items-center space-x-1 pl-2">
+        <button
+          onClick={() => openTab()}
+          className="p-1.5 text-gray-500 hover:text-gray-200 hover:bg-gray-850 rounded transition-colors"
+          title="New Request Tab"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+
+        <div className="w-[1px] h-4 bg-gray-800 mx-1"></div>
+
+        {/* Two-pane layout toggle: Side-by-side vs Stacked */}
+        <button
+          onClick={() => setLayout(layout === 'horizontal' ? 'vertical' : 'horizontal')}
+          className="flex items-center space-x-1 p-1.5 text-gray-400 hover:text-orange-400 hover:bg-gray-850 rounded transition-colors"
+          title={layout === 'horizontal' ? 'Switch to Top & Bottom layout' : 'Switch to Side-by-Side layout'}
+        >
+          {layout === 'horizontal' ? (
+            <Rows className="w-3.5 h-3.5" />
+          ) : (
+            <Columns className="w-3.5 h-3.5" />
+          )}
+        </button>
+      </div>
     </div>
   );
 };

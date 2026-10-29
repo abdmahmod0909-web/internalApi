@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore.js';
-import { Layers, Settings, Eye, Search, Play, Save } from 'lucide-react';
+import { Layers, Settings, Eye, Search, Play, Save, Upload, Palette } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const {
@@ -9,6 +9,9 @@ export const Navbar: React.FC = () => {
     setActiveEnvironmentId,
     setEnvModalOpen,
     setCommandPaletteOpen,
+    setImportModalOpen,
+    theme,
+    setTheme,
     sendRequest,
     saveCurrentRequest,
     tabs,
@@ -48,6 +51,30 @@ export const Navbar: React.FC = () => {
 
       {/* Right Controls: Quick Actions, Environments, Settings */}
       <div className="flex items-center space-x-2">
+        {/* Import Collection / cURL Button */}
+        <button
+          onClick={() => setImportModalOpen(true)}
+          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+          title="Import Postman Collection v2.1 or cURL"
+        >
+          <Upload className="w-3.5 h-3.5 text-orange-500" />
+          <span>Import</span>
+        </button>
+
+        {/* Theme Selector */}
+        <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-1.5 py-0.5" title="Switch Theme">
+          <Palette className="w-3.5 h-3.5 text-gray-400 mr-1" />
+          <select
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as any)}
+            className="bg-transparent text-xs text-gray-300 py-1 outline-none cursor-pointer"
+          >
+            <option value="dark" className="bg-gray-900 text-gray-200">Dark (Postman)</option>
+            <option value="midnight" className="bg-gray-900 text-gray-200">Midnight Blue</option>
+            <option value="light" className="bg-white text-gray-800">Light (Clean)</option>
+          </select>
+        </div>
+
         {/* Environment Picker */}
         <div className="flex items-center bg-gray-900 border border-gray-800 rounded-md p-0.5">
           <select

@@ -158,7 +158,11 @@ class LocalFileStorage {
     try {
       if (fs.existsSync(DATA_FILE)) {
         const content = fs.readFileSync(DATA_FILE, 'utf8');
-        return JSON.parse(content);
+        const parsed = JSON.parse(content);
+        if (!parsed.collections || parsed.collections.length === 0) {
+          parsed.collections = [...INITIAL_DEMO_DATA.collections];
+        }
+        return parsed;
       }
     } catch (e) {
       // If error reading, fallback to initial demo

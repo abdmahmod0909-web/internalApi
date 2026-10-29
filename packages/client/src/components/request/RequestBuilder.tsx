@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
-import { Play, Save, Loader2, Sparkles, Key, Terminal, Check } from 'lucide-react';
-import { isCurlCommand, parseCurlCommand } from '@internalapi/shared';
+import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy } from 'lucide-react';
+import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -11,6 +11,7 @@ export const RequestBuilder: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'prereq' | 'tests' | 'settings'>('params');
   const [isFetchingToken, setIsFetchingToken] = useState(false);
   const [curlImportNotice, setCurlImportNotice] = useState<string | null>(null);
+  const [isCurlCopied, setIsCurlCopied] = useState(false);
 
   const { tabs, activeTabId, updateActiveRequest, sendRequest, saveCurrentRequest } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
@@ -204,6 +205,25 @@ export const RequestBuilder: React.FC = () => {
         >
           <Save className="w-3.5 h-3.5" />
           <span>Save</span>
+        </button>
+
+        {/* Copy as cURL Button */}
+        <button
+          onClick={() => {
+            const curl = generateCurlCommand(req);
+            navigator.clipboard.writeText(curl);
+            setIsCurlCopied(true);
+            setTimeout(() => setIsCurlCopied(false), 2000);
+          }}
+          className={`flex items-center space-x-1 text-xs px-3 py-2 rounded border transition-colors ${
+            isCurlCopied
+              ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+              : 'bg-gray-800 hover:bg-gray-750 text-gray-300 border-gray-700'
+          }`}
+          title="Generate and copy as executable cURL command"
+        >
+          {isCurlCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{isCurlCopied ? 'Copied cURL!' : 'Copy cURL'}</span>
         </button>
       </div>
 

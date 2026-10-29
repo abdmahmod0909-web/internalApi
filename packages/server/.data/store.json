@@ -115,7 +115,7 @@
                 }
               },
               "bodyType": "json",
-              "bodyContent": "{\n  \"message\": \"Hello from InternalAPI Postman clone!\",\n  \"service\": \"billing-service\",\n  \"timestamp\": \"2026-10-29T20:09:34.709Z\"\n}"
+              "bodyContent": "{\n  \"message\": \"Hello from InternalAPI Postman clone!\",\n  \"service\": \"billing-service\",\n  \"timestamp\": \"2026-10-29T20:39:28.905Z\"\n}"
             }
           ]
         }
@@ -124,6 +124,56 @@
     }
   ],
   "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3104,
+      "time": 752,
+      "id": "hist-e5f17f50-c4f8-4297-aed4-bba1f4290955",
+      "createdAt": "2026-10-29T20:40:36.189Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 1072,
+      "id": "hist-ca51ad77-63f4-4906-8abd-655c539c9a59",
+      "createdAt": "2026-10-29T20:39:12.265Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 584,
+      "id": "hist-81401c8e-a1f5-4b3e-a402-e7b9d21c490c",
+      "createdAt": "2026-10-29T20:35:17.963Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 579,
+      "id": "hist-9b5f7ce9-c937-44e5-aa35-4cb892085945",
+      "createdAt": "2026-10-29T20:34:53.562Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3109,
+      "time": 861,
+      "id": "hist-94240355-28b4-466e-8b38-3500dc7cc1bf",
+      "createdAt": "2026-10-29T20:30:58.771Z"
+    },
     {
       "workspaceId": "ws-default-company",
       "method": "GET",

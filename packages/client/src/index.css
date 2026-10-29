@@ -2,6 +2,114 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-main: #030712;
+  --bg-panel: #0b0f19;
+  --bg-subtle: #111827;
+  --bg-input: #1f2937;
+  --border-color: #374151;
+  --text-main: #f9fafb;
+  --text-muted: #9ca3af;
+  --accent-color: #f97316;
+}
+
+html.theme-midnight {
+  --bg-main: #060b19;
+  --bg-panel: #0a1128;
+  --bg-subtle: #0f1c3f;
+  --bg-input: #172554;
+  --border-color: #1e3a8a;
+  --text-main: #f0f9ff;
+  --text-muted: #93c5fd;
+  --accent-color: #38bdf8;
+}
+
+html.theme-midnight .bg-gray-950 {
+  background-color: #060b19 !important;
+}
+html.theme-midnight .bg-gray-900 {
+  background-color: #0b1329 !important;
+}
+html.theme-midnight .bg-gray-850 {
+  background-color: #0f1c3f !important;
+}
+html.theme-midnight .border-gray-800 {
+  border-color: #172554 !important;
+}
+html.theme-midnight .border-gray-700 {
+  border-color: #1e3a8a !important;
+}
+html.theme-midnight .text-orange-500 {
+  color: #38bdf8 !important;
+}
+html.theme-midnight .text-orange-400 {
+  color: #38bdf8 !important;
+}
+html.theme-midnight .bg-orange-600 {
+  background-color: #0284c7 !important;
+}
+html.theme-midnight .border-orange-500 {
+  border-color: #38bdf8 !important;
+}
+
+html.theme-light {
+  --bg-main: #f8fafc;
+  --bg-panel: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-input: #ffffff;
+  --border-color: #cbd5e1;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --accent-color: #2563eb;
+}
+
+html.theme-light .bg-gray-950 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+html.theme-light .bg-gray-900 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+html.theme-light .bg-gray-850 {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+html.theme-light .border-gray-800 {
+  border-color: #e2e8f0 !important;
+}
+html.theme-light .border-gray-700 {
+  border-color: #cbd5e1 !important;
+}
+html.theme-light .text-gray-100,
+html.theme-light .text-gray-200,
+html.theme-light .text-gray-300 {
+  color: #0f172a !important;
+}
+html.theme-light .text-gray-400 {
+  color: #475569 !important;
+}
+html.theme-light .text-gray-500 {
+  color: #64748b !important;
+}
+html.theme-light input,
+html.theme-light select,
+html.theme-light textarea {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+html.theme-light .text-orange-500,
+html.theme-light .text-orange-400 {
+  color: #2563eb !important;
+}
+html.theme-light .bg-orange-600 {
+  background-color: #2563eb !important;
+}
+html.theme-light .border-orange-500 {
+  border-color: #2563eb !important;
+}
+
 @layer base {
   ::-webkit-scrollbar {
     width: 6px;
@@ -18,4 +126,3 @@
     background: #4b5563;
   }
 }
-
