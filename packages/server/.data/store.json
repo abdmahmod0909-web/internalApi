@@ -127,6 +127,96 @@
     {
       "workspaceId": "ws-default-company",
       "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3100,
+      "time": 734,
+      "id": "hist-cd18c7dc-858a-4d6e-9416-8fcaae3eb641",
+      "createdAt": "2026-10-29T20:24:51.010Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3109,
+      "time": 287,
+      "id": "hist-672511fb-c976-4de7-93af-5971a3b09c88",
+      "createdAt": "2026-10-29T20:24:01.856Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 322,
+      "id": "hist-cb298638-c2c3-49aa-93c3-de6faad7b028",
+      "createdAt": "2026-10-29T20:24:01.012Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3096,
+      "time": 258,
+      "id": "hist-d6989778-da3c-4f77-a3bb-def4a8f05fbe",
+      "createdAt": "2026-10-29T20:23:57.957Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 281,
+      "id": "hist-df9d02dc-f2e9-4d3c-bb8e-ca9ff2871629",
+      "createdAt": "2026-10-29T20:23:57.135Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 846,
+      "id": "hist-3a0d075c-0abd-47af-9ad0-03f0fa58209e",
+      "createdAt": "2026-10-29T20:23:56.780Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 1256,
+      "id": "hist-0231256c-4697-4364-82a2-f0f7a4fc4fa4",
+      "createdAt": "2026-10-29T20:22:01.125Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "curl --url 'https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762' \\   -H 'accept: application/json, text/plain, */*' \\   -H 'accept-language: en-US,en;q=0.9' \\   -H 'api: 1' \\   -H 'authorization: Bearer 7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85' \\   -H 'cache-control: no-cache' \\   -H 'lang: ar' \\   -H 'origin: https://new-pre-prod.d18axrryrol4bb.amplifyapp.com' \\   -H 'pragma: no-cache' \\   -H 'priority: u=1, i' \\   -H 'program: 1' \\   -H 'referer: https://new-pre-prod.d18axrryrol4bb.amplifyapp.com/' \\   -H 'sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"' \\   -H 'sec-ch-ua-mobile: ?0' \\   -H 'sec-ch-ua-platform: \"Windows\"' \\   -H 'sec-fetch-dest: empty' \\   -H 'sec-fetch-mode: cors' \\   -H 'sec-fetch-site: cross-site' \\   -H 'shouldnotredirect401: true' \\   -H 'shouldnotredirect404: true' \\   -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-62cdbcf1-1d57-41b1-8a01-b9ff400c6811",
+      "createdAt": "2026-10-29T20:17:57.209Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "curl --url 'https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762' \\   -H 'accept: application/json, text/plain, */*' \\   -H 'accept-language: en-US,en;q=0.9' \\   -H 'api: 1' \\   -H 'authorization: Bearer 7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85' \\   -H 'cache-control: no-cache' \\   -H 'lang: ar' \\   -H 'origin: https://new-pre-prod.d18axrryrol4bb.amplifyapp.com' \\   -H 'pragma: no-cache' \\   -H 'priority: u=1, i' \\   -H 'program: 1' \\   -H 'referer: https://new-pre-prod.d18axrryrol4bb.amplifyapp.com/' \\   -H 'sec-ch-ua: \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"' \\   -H 'sec-ch-ua-mobile: ?0' \\   -H 'sec-ch-ua-platform: \"Windows\"' \\   -H 'sec-fetch-dest: empty' \\   -H 'sec-fetch-mode: cors' \\   -H 'sec-fetch-site: cross-site' \\   -H 'shouldnotredirect401: true' \\   -H 'shouldnotredirect404: true' \\   -H 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36'",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-ee53a8aa-b062-42c4-bf27-e9108c8c2f57",
+      "createdAt": "2026-10-29T20:17:56.094Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
       "url": "https://httpbin.org/get",
       "status": 200,
       "size": 261,

@@ -31,3 +31,4 @@ describe('Client Zustand Store', () => {
     expect(activeTab?.request.url).toBe('https://httpbin.org/delete');
   });
 });
+

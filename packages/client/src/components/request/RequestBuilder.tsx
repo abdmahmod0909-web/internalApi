@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
-import { Play, Save, Loader2, Sparkles, Key } from 'lucide-react';
+import { Play, Save, Loader2, Sparkles, Key, Terminal, Check } from 'lucide-react';
+import { isCurlCommand, parseCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -9,6 +10,7 @@ const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HE
 export const RequestBuilder: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'settings'>('params');
   const [isFetchingToken, setIsFetchingToken] = useState(false);
+  const [curlImportNotice, setCurlImportNotice] = useState<string | null>(null);
 
   const { tabs, activeTabId, updateActiveRequest, sendRequest, saveCurrentRequest } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
@@ -18,6 +20,40 @@ export const RequestBuilder: React.FC = () => {
   }
 
   const req = currentTab.request;
+
+  // Handle cURL import
+  const applyCurlImport = (curlText: string) => {
+    try {
+      const parsed = parseCurlCommand(curlText);
+      updateActiveRequest((prev) => ({
+        ...prev,
+        ...parsed,
+        id: prev.id,
+        collectionId: prev.collectionId,
+        folderId: prev.folderId,
+      }));
+      setCurlImportNotice(`cURL imported: ${parsed.method} with ${parsed.headers?.length || 0} headers`);
+      setTimeout(() => setCurlImportNotice(null), 4000);
+    } catch (e: any) {
+      console.error('Failed to parse cURL:', e);
+    }
+  };
+
+  const handleUrlPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (isCurlCommand(pasted)) {
+      e.preventDefault();
+      applyCurlImport(pasted);
+    }
+  };
+
+  const handleUrlChange = (value: string) => {
+    if (isCurlCommand(value)) {
+      applyCurlImport(value);
+      return;
+    }
+    updateActiveRequest((prev) => ({ ...prev, url: value }));
+  };
 
   // Auto-sync query params into URL string
   const handleQueryParamsChange = (items: any[]) => {
@@ -104,11 +140,10 @@ export const RequestBuilder: React.FC = () => {
         <div className="flex-1 relative">
           <input
             type="text"
-            placeholder="https://api.company.com/v1/resource or {{base_url}}/users"
+            placeholder="Enter request URL or paste cURL command here..."
             value={req.url}
-            onChange={(e) =>
-              updateActiveRequest((prev) => ({ ...prev, url: e.target.value }))
-            }
+            onChange={(e) => handleUrlChange(e.target.value)}
+            onPaste={handleUrlPaste}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 sendRequest();
@@ -117,6 +152,35 @@ export const RequestBuilder: React.FC = () => {
             className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-gray-100 placeholder-gray-500 font-mono outline-none focus:border-orange-500 transition-colors"
           />
         </div>
+
+        {/* Quick cURL Paste Action */}
+        <button
+          onClick={async () => {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (isCurlCommand(text)) {
+                applyCurlImport(text);
+              } else {
+                const promptCurl = prompt('Paste your cURL command here:');
+                if (promptCurl && isCurlCommand(promptCurl)) {
+                  applyCurlImport(promptCurl);
+                } else if (promptCurl) {
+                  alert('Input does not start with curl');
+                }
+              }
+            } catch {
+              const promptCurl = prompt('Paste your cURL command here:');
+              if (promptCurl && isCurlCommand(promptCurl)) {
+                applyCurlImport(promptCurl);
+              }
+            }
+          }}
+          className="flex items-center space-x-1 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-gray-200 text-xs px-2.5 py-2 rounded border border-gray-800 transition-colors"
+          title="Import from cURL"
+        >
+          <Terminal className="w-3.5 h-3.5 text-orange-400" />
+          <span>Import cURL</span>
+        </button>
 
         {/* Send Button */}
         <button
@@ -142,6 +206,14 @@ export const RequestBuilder: React.FC = () => {
           <span>Save</span>
         </button>
       </div>
+
+      {/* Auto-imported cURL Notice Banner */}
+      {curlImportNotice && (
+        <div className="bg-emerald-950/70 border-b border-emerald-800/80 px-4 py-2 flex items-center space-x-2 text-xs text-emerald-300 animate-fadeIn">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>{curlImportNotice}</span>
+        </div>
+      )}
 
       {/* Sub Tabs Bar */}
       <div className="flex border-b border-gray-800 text-xs font-medium text-gray-400 px-3 bg-gray-950">

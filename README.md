@@ -135,3 +135,4 @@ npm run prisma:seed --workspace=@internalapi/server
 ├── docker-compose.yml   # App + PostgreSQL container orchestration
 └── .env.example         # Production configuration template
 ```
+
