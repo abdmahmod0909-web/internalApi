@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   Workspace,
   Collection,
+  Folder,
   Environment,
   ApiRequestData,
   ApiResponseData,
@@ -73,6 +74,13 @@ interface AppState {
   deleteEnvironment: (id: string) => Promise<void>;
   createCollection: (name: string) => Promise<void>;
   deleteCollection: (id: string) => Promise<void>;
+  renameCollection: (id: string, name: string) => Promise<void>;
+  addFolder: (collectionId: string, folderName: string) => Promise<void>;
+  renameFolder: (collectionId: string, folderId: string, name: string) => Promise<void>;
+  deleteFolder: (collectionId: string, folderId: string) => Promise<void>;
+  addRequestToCollection: (collectionId: string, folderId: string | null, name?: string) => Promise<void>;
+  deleteRequestFromCollection: (collectionId: string, folderId: string | null, requestId: string) => Promise<void>;
+  renameRequestInCollection: (collectionId: string, folderId: string | null, requestId: string, name: string) => Promise<void>;
   refreshHistory: () => Promise<void>;
   clearHistory: () => Promise<void>;
 }
@@ -557,6 +565,170 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = get().collections.filter((c) => c.id !== id);
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  renameCollection: async (id, name) => {
+    const col = get().collections.find((c) => c.id === id);
+    if (!col) return;
+    const updated = { ...col, name };
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === id ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  addFolder: async (collectionId, folderName) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const newFolder: Folder = {
+      id: `fld-${Date.now()}`,
+      collectionId,
+      name: folderName,
+      sortOrder: col.folders?.length || 0,
+      requests: [],
+    };
+    const updated = {
+      ...col,
+      folders: [...(col.folders || []), newFolder],
+    };
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  renameFolder: async (collectionId, folderId, name) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const updated = {
+      ...col,
+      folders: (col.folders || []).map((f) => (f.id === folderId ? { ...f, name } : f)),
+    };
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  deleteFolder: async (collectionId, folderId) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const updated = {
+      ...col,
+      folders: (col.folders || []).filter((f) => f.id !== folderId),
+    };
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  addRequestToCollection: async (collectionId, folderId, name = 'New Request') => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const newReq: ApiRequestData = {
+      ...DEFAULT_NEW_REQUEST,
+      id: `req-${Date.now()}`,
+      name,
+      collectionId,
+      folderId,
+    };
+    const updated = { ...col };
+    if (folderId) {
+      updated.folders = (updated.folders || []).map((f) =>
+        f.id === folderId ? { ...f, requests: [...(f.requests || []), newReq] } : f
+      );
+    } else {
+      updated.requests = [...(updated.requests || []), newReq];
+    }
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+    get().openTab(newReq, newReq.id);
+  },
+
+  deleteRequestFromCollection: async (collectionId, folderId, requestId) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const updated = { ...col };
+    if (folderId) {
+      updated.folders = (updated.folders || []).map((f) =>
+        f.id === folderId ? { ...f, requests: (f.requests || []).filter((r) => r.id !== requestId) } : f
+      );
+    } else {
+      updated.requests = (updated.requests || []).filter((r) => r.id !== requestId);
+    }
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+    set({ collections: next });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+  },
+
+  renameRequestInCollection: async (collectionId, folderId, requestId, name) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (!col) return;
+    const updated = { ...col };
+    if (folderId) {
+      updated.folders = (updated.folders || []).map((f) =>
+        f.id === folderId
+          ? {
+              ...f,
+              requests: (f.requests || []).map((r) => (r.id === requestId ? { ...r, name } : r)),
+            }
+          : f
+      );
+    } else {
+      updated.requests = (updated.requests || []).map((r) =>
+        r.id === requestId ? { ...r, name } : r
+      );
+    }
+    const res = await fetch('/api/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    const saved = await res.json();
+    const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
+
+    // Also update open tabs matching this request
+    const nextTabs = get().tabs.map((t) =>
+      t.request.id === requestId ? { ...t, name, request: { ...t.request, name } } : t
+    );
+
+    set({ collections: next, tabs: nextTabs });
+    setStoredItem('internalapi_collections', JSON.stringify(next));
+    setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
   },
 
   refreshHistory: async () => {

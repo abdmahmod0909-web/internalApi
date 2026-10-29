@@ -184,7 +184,7 @@ class LocalFileStorage {
       if (fs.existsSync(DATA_FILE)) {
         const content = fs.readFileSync(DATA_FILE, 'utf8');
         const parsed = JSON.parse(content);
-        if (!parsed.collections || parsed.collections.length === 0) {
+        if (!Array.isArray(parsed.collections)) {
           parsed.collections = [...INITIAL_DEMO_DATA.collections];
         }
         return parsed;

@@ -120,15 +120,68 @@ export const RequestBuilder: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-950 border-r border-gray-800">
-      {/* Top Bar: Method + URL + Send + Save */}
+    <div className="flex flex-col h-full bg-gray-950">
+      {/* Header Row: Editable Request Title & Save / Copy cURL Actions */}
+      <div className="px-3 py-2 border-b border-gray-800 flex items-center justify-between gap-2 bg-gray-950/80">
+        <div className="flex items-center space-x-2 flex-1 min-w-0">
+          <input
+            type="text"
+            value={req.name || currentTab.name || 'Untitled Request'}
+            onChange={(e) => {
+              const newName = e.target.value;
+              updateActiveRequest((prev) => ({ ...prev, name: newName }));
+            }}
+            placeholder="Request Name"
+            className="bg-transparent hover:bg-gray-900 focus:bg-gray-900 border border-transparent hover:border-gray-800 focus:border-orange-500 rounded px-2 py-1 text-sm font-semibold text-gray-100 placeholder-gray-500 outline-none transition-colors w-full max-w-sm truncate"
+            title="Click to rename request"
+          />
+          {currentTab.isDirty && (
+            <span
+              className="w-2 h-2 rounded-full bg-orange-500 shrink-0"
+              title="Unsaved changes (Ctrl+S to save)"
+            />
+          )}
+        </div>
+
+        {/* Action Buttons: Save + Copy cURL */}
+        <div className="flex items-center space-x-2 shrink-0">
+          <button
+            onClick={() => saveCurrentRequest()}
+            className="flex items-center space-x-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-1.5 rounded border border-gray-700 transition-colors"
+            title="Save Request (Ctrl+S)"
+          >
+            <Save className="w-3.5 h-3.5 text-orange-400" />
+            <span>Save</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const curl = generateCurlCommand(req);
+              navigator.clipboard.writeText(curl);
+              setIsCurlCopied(true);
+              setTimeout(() => setIsCurlCopied(false), 2000);
+            }}
+            className={`flex items-center space-x-1 text-xs px-3 py-1.5 rounded border transition-colors ${
+              isCurlCopied
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                : 'bg-gray-800 hover:bg-gray-700 text-gray-200 border-gray-700'
+            }`}
+            title="Generate and copy as executable cURL command"
+          >
+            {isCurlCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+            <span>{isCurlCopied ? 'Copied!' : 'Copy cURL'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* URL Execution Bar: Method + URL + Import cURL + Send */}
       <div className="p-3 border-b border-gray-800 flex items-center space-x-2">
         <select
           value={req.method}
           onChange={(e) =>
             updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
           }
-          className="bg-gray-900 border border-gray-700 font-bold text-xs rounded px-2.5 py-2 text-orange-400 outline-none cursor-pointer"
+          className="bg-gray-900 border border-gray-700 font-bold text-xs rounded px-2.5 py-2 text-orange-400 outline-none cursor-pointer shrink-0"
         >
           {HTTP_METHODS.map((m) => (
             <option key={m} value={m} className="bg-gray-900 text-gray-200">
@@ -138,7 +191,7 @@ export const RequestBuilder: React.FC = () => {
         </select>
 
         {/* URL Input */}
-        <div className="flex-1 relative">
+        <div className="flex-1 min-w-0 relative">
           <input
             type="text"
             placeholder="Enter request URL or paste cURL command here..."
@@ -176,18 +229,18 @@ export const RequestBuilder: React.FC = () => {
               }
             }
           }}
-          className="flex items-center space-x-1 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-gray-200 text-xs px-2.5 py-2 rounded border border-gray-800 transition-colors"
+          className="flex items-center space-x-1 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-gray-200 text-xs px-2.5 py-2 rounded border border-gray-800 transition-colors shrink-0"
           title="Import from cURL"
         >
           <Terminal className="w-3.5 h-3.5 text-orange-400" />
-          <span>Import cURL</span>
+          <span className="hidden sm:inline">Import cURL</span>
         </button>
 
         {/* Send Button */}
         <button
           onClick={() => sendRequest()}
           disabled={currentTab.isLoading}
-          className="flex items-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded transition-colors"
+          className="flex items-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded transition-colors shrink-0 shadow-sm"
         >
           {currentTab.isLoading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -195,35 +248,6 @@ export const RequestBuilder: React.FC = () => {
             <Play className="w-3.5 h-3.5 fill-current" />
           )}
           <span>Send</span>
-        </button>
-
-        {/* Save Button */}
-        <button
-          onClick={() => saveCurrentRequest()}
-          className="flex items-center space-x-1 bg-gray-800 hover:bg-gray-750 text-gray-300 text-xs px-3 py-2 rounded border border-gray-700 transition-colors"
-          title="Save Request"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>Save</span>
-        </button>
-
-        {/* Copy as cURL Button */}
-        <button
-          onClick={() => {
-            const curl = generateCurlCommand(req);
-            navigator.clipboard.writeText(curl);
-            setIsCurlCopied(true);
-            setTimeout(() => setIsCurlCopied(false), 2000);
-          }}
-          className={`flex items-center space-x-1 text-xs px-3 py-2 rounded border transition-colors ${
-            isCurlCopied
-              ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
-              : 'bg-gray-800 hover:bg-gray-750 text-gray-300 border-gray-700'
-          }`}
-          title="Generate and copy as executable cURL command"
-        >
-          {isCurlCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-          <span>{isCurlCopied ? 'Copied cURL!' : 'Copy cURL'}</span>
         </button>
       </div>
 
