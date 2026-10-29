@@ -9,6 +9,13 @@ import fs from 'node:fs';
 import { interpolateDeep } from '@internalapi/shared';
 import type { ApiRequestData } from '@internalapi/shared';
 import { db } from './storage/db.js';
+import {
+  testDatabaseConnection,
+  getRemoteCollections,
+  saveRemoteCollection,
+  deleteRemoteCollection,
+  isDbConfigured,
+} from './storage/db-sync.js';
 import { executeProxyRequest } from './proxy/http-client.js';
 import { fetchOAuth2ClientCredentials } from './proxy/oauth2.js';
 
@@ -98,24 +105,71 @@ export function buildApp(): FastifyInstance {
     return { success };
   });
 
+  // Database Connection Test
+  app.post('/api/db/test', async (req) => {
+    const body = req.body as { dbConnection?: any } | any;
+    const config = body?.dbConnection || body;
+    return testDatabaseConnection(config);
+  });
+
   // Collections
   app.get('/api/collections', async (req) => {
-    const query = req.query as { workspaceId?: string };
+    const query = req.query as { workspaceId?: string; environmentId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+
+    if (query.environmentId) {
+      const env = db.getEnvironmentRaw(query.environmentId);
+      if (isDbConfigured(env?.dbConnection)) {
+        try {
+          const remoteCols = await getRemoteCollections(env!.dbConnection!, wsId);
+          return remoteCols;
+        } catch (err) {
+          app.log.warn({ err }, 'Failed to fetch collections from remote DB, falling back to local storage');
+        }
+      }
+    }
+
     return db.getCollections(wsId);
   });
 
   app.post('/api/collections', async (req) => {
+    const query = req.query as { environmentId?: string };
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Collection name is required');
     }
-    return db.saveCollection(body);
+    const saved = db.saveCollection(body);
+
+    if (query.environmentId) {
+      const env = db.getEnvironmentRaw(query.environmentId);
+      if (isDbConfigured(env?.dbConnection)) {
+        try {
+          await saveRemoteCollection(env!.dbConnection!, saved);
+        } catch (err) {
+          app.log.warn({ err }, 'Failed to sync saved collection to remote DB');
+        }
+      }
+    }
+
+    return saved;
   });
 
   app.delete('/api/collections/:id', async (req) => {
     const { id } = req.params as { id: string };
+    const query = req.query as { environmentId?: string };
     const success = db.deleteCollection(id);
+
+    if (query.environmentId) {
+      const env = db.getEnvironmentRaw(query.environmentId);
+      if (isDbConfigured(env?.dbConnection)) {
+        try {
+          await deleteRemoteCollection(env!.dbConnection!, id);
+        } catch (err) {
+          app.log.warn({ err }, 'Failed to delete collection from remote DB');
+        }
+      }
+    }
+
     return { success };
   });
 

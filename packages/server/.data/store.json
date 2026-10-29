@@ -5722,6 +5722,36 @@
       "url": "https://httpbin.org/get",
       "status": 200,
       "size": 261,
+      "time": 577,
+      "id": "hist-a4517266-292e-481a-ab57-315c97d2b439",
+      "createdAt": "2026-10-29T21:15:31.176Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 539,
+      "id": "hist-6c44dac0-742e-4f46-842a-f173067dda57",
+      "createdAt": "2026-10-29T21:15:10.729Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "{{api_v1}}/activity-logs?filters[causer_user]=1",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-be388d26-714f-4d1d-ae62-0cb5b4bb194e",
+      "createdAt": "2026-10-29T21:14:12.186Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
       "time": 570,
       "id": "hist-2bc1643f-f9d4-4d76-9322-aa796031a8a5",
       "createdAt": "2026-10-29T21:06:29.318Z"

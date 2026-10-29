@@ -263,11 +263,27 @@ class LocalFileStorage {
           // Mask secret variables when returning to client
           value: v.isSecret ? '••••••••' : v.value,
         })),
+        dbConnection: env.dbConnection
+          ? {
+              ...env.dbConnection,
+              password: env.dbConnection.password ? decryptSecret(env.dbConnection.password) : '',
+            }
+          : undefined,
       }));
   }
 
   getEnvironmentRaw(id: string): Environment | undefined {
-    return this.data.environments.find((e) => e.id === id);
+    const env = this.data.environments.find((e) => e.id === id);
+    if (!env) return undefined;
+    return {
+      ...env,
+      dbConnection: env.dbConnection
+        ? {
+            ...env.dbConnection,
+            password: env.dbConnection.password ? decryptSecret(env.dbConnection.password) : '',
+          }
+        : undefined,
+    };
   }
 
   saveEnvironment(env: Environment): Environment {
@@ -288,10 +304,16 @@ class LocalFileStorage {
       return v;
     });
 
+    let processedDbConn = env.dbConnection ? { ...env.dbConnection } : undefined;
+    if (processedDbConn && processedDbConn.password) {
+      processedDbConn.password = encryptSecret(processedDbConn.password);
+    }
+
     const toSave: Environment = {
       ...env,
       id: env.id || `env-${crypto.randomUUID()}`,
       variables: processedVariables,
+      dbConnection: processedDbConn,
     };
 
     if (index >= 0) {

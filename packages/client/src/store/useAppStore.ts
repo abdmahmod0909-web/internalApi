@@ -72,6 +72,7 @@ interface AppState {
   saveCurrentRequest: (collectionId?: string, folderId?: string | null) => Promise<void>;
   saveEnvironment: (env: Environment) => Promise<void>;
   deleteEnvironment: (id: string) => Promise<void>;
+  loadCollections: () => Promise<void>;
   createCollection: (name: string) => Promise<void>;
   deleteCollection: (id: string) => Promise<void>;
   renameCollection: (id: string, name: string) => Promise<void>;
@@ -215,7 +216,25 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  setActiveEnvironmentId: (id) => set({ activeEnvironmentId: id }),
+  setActiveEnvironmentId: (id) => {
+    set({ activeEnvironmentId: id });
+    setStoredItem('internalapi_active_env_id', id || '');
+    get().loadCollections();
+  },
+
+  loadCollections: async () => {
+    const { activeWorkspaceId, activeEnvironmentId } = get();
+    const envParam = activeEnvironmentId ? `&environmentId=${activeEnvironmentId}` : '';
+    try {
+      const res = await fetch(`/api/collections?workspaceId=${activeWorkspaceId}${envParam}`).then((r) => r.json());
+      if (Array.isArray(res)) {
+        set({ collections: res });
+        setStoredItem('internalapi_collections', JSON.stringify(res));
+      }
+    } catch (e) {
+      console.error('Failed to load collections:', e);
+    }
+  },
 
   openTab: (partialRequest, customId) => {
     const tabs = get().tabs;
@@ -495,7 +514,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     // Save to backend
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedCol),
@@ -527,6 +547,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     set({ environments: next });
     setStoredItem('internalapi_environments', JSON.stringify(next));
+
+    // Reload collections for active environment in case DB config was updated
+    if (get().activeEnvironmentId === saved.id || !get().activeEnvironmentId) {
+      get().loadCollections();
+    }
   },
 
   deleteEnvironment: async (id) => {
@@ -549,7 +574,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       folders: [],
       requests: [],
     };
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCol),
@@ -561,7 +587,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteCollection: async (id) => {
-    await fetch(`/api/collections/${id}`, { method: 'DELETE' });
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    await fetch(`/api/collections/${id}${envParam}`, { method: 'DELETE' });
     const next = get().collections.filter((c) => c.id !== id);
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
@@ -571,7 +598,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const col = get().collections.find((c) => c.id === id);
     if (!col) return;
     const updated = { ...col, name };
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -596,7 +624,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...col,
       folders: [...(col.folders || []), newFolder],
     };
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -614,7 +643,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...col,
       folders: (col.folders || []).map((f) => (f.id === folderId ? { ...f, name } : f)),
     };
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -632,7 +662,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...col,
       folders: (col.folders || []).filter((f) => f.id !== folderId),
     };
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -661,7 +692,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       updated.requests = [...(updated.requests || []), newReq];
     }
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -684,7 +716,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     } else {
       updated.requests = (updated.requests || []).filter((r) => r.id !== requestId);
     }
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -713,7 +746,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         r.id === requestId ? { ...r, name } : r
       );
     }
-    const res = await fetch('/api/collections', {
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await fetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),

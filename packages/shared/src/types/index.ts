@@ -131,11 +131,22 @@ export interface EnvironmentVariable {
   isEnabled: boolean;
 }
 
+export interface DatabaseConnectionConfig {
+  type: 'postgres' | 'mysql';
+  host: string;
+  port?: string | number;
+  database: string;
+  username: string;
+  password?: string;
+  ssl?: boolean;
+}
+
 export interface Environment {
   id: string;
   workspaceId: string;
   name: string;
   variables: EnvironmentVariable[];
+  dbConnection?: DatabaseConnectionConfig;
   createdAt?: string;
   updatedAt?: string;
 }
