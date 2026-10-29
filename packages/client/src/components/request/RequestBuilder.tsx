@@ -8,7 +8,7 @@ import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
 export const RequestBuilder: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'settings'>('params');
+  const [activeSubTab, setActiveSubTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'prereq' | 'tests' | 'settings'>('params');
   const [isFetchingToken, setIsFetchingToken] = useState(false);
   const [curlImportNotice, setCurlImportNotice] = useState<string | null>(null);
 
@@ -222,6 +222,8 @@ export const RequestBuilder: React.FC = () => {
           { key: 'auth', label: `Auth ${req.auth?.type !== 'none' ? '•' : ''}` },
           { key: 'headers', label: `Headers ${req.headers?.filter((h) => h.isEnabled && h.key).length ? `(${req.headers.filter((h) => h.isEnabled && h.key).length})` : ''}` },
           { key: 'body', label: `Body ${req.bodyType !== 'none' ? '•' : ''}` },
+          { key: 'prereq', label: `Pre-req ${req.preScript ? '•' : ''}` },
+          { key: 'tests', label: `Tests ${req.postScript ? '•' : ''}` },
           { key: 'settings', label: 'Settings' },
         ].map((tab) => (
           <button
@@ -603,6 +605,118 @@ export const RequestBuilder: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeSubTab === 'prereq' && (
+          <div className="flex h-full min-h-[300px]">
+            {/* Editor Area */}
+            <div className="flex-1 p-3 flex flex-col">
+              <div className="text-[11px] text-gray-400 mb-1 flex items-center justify-between">
+                <span>Pre-request Script (JavaScript executed before request is sent)</span>
+                <span className="text-gray-500 font-mono">pm.environment.*</span>
+              </div>
+              <textarea
+                value={req.preScript || ''}
+                onChange={(e) => updateActiveRequest((prev) => ({ ...prev, preScript: e.target.value }))}
+                placeholder="// Execute JavaScript before sending the request&#10;pm.environment.set('timestamp', Date.now());"
+                className="flex-1 min-h-[250px] bg-gray-900 border border-gray-800 rounded p-3 text-xs text-emerald-300 font-mono outline-none focus:border-gray-700 resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* Snippets Sidebar */}
+            <div className="w-56 border-l border-gray-800/80 p-3 bg-gray-950/50 select-none">
+              <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Snippets
+              </div>
+              <div className="space-y-1 text-xs">
+                {[
+                  {
+                    label: 'Set an environment variable',
+                    code: 'pm.environment.set("variable_key", "variable_value");\n',
+                  },
+                  {
+                    label: 'Get an environment variable',
+                    code: 'const val = pm.environment.get("variable_key");\n',
+                  },
+                  {
+                    label: 'Clear an environment variable',
+                    code: 'pm.environment.unset("variable_key");\n',
+                  },
+                ].map((snip, i) => (
+                  <button
+                    key={i}
+                    onClick={() =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        preScript: (prev.preScript || '') + (prev.preScript ? '\n' : '') + snip.code,
+                      }))
+                    }
+                    className="w-full text-left p-1.5 rounded hover:bg-gray-800 text-orange-400 hover:text-orange-300 transition-colors text-[11px] truncate block"
+                  >
+                    {snip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeSubTab === 'tests' && (
+          <div className="flex h-full min-h-[300px]">
+            {/* Editor Area */}
+            <div className="flex-1 p-3 flex flex-col">
+              <div className="text-[11px] text-gray-400 mb-1 flex items-center justify-between">
+                <span>Post-response Test Script (Assertions & Variable Extraction)</span>
+                <span className="text-gray-500 font-mono">pm.test, pm.expect, pm.response</span>
+              </div>
+              <textarea
+                value={req.postScript || ''}
+                onChange={(e) => updateActiveRequest((prev) => ({ ...prev, postScript: e.target.value }))}
+                placeholder="// Write tests with assertions&#10;pm.test('Status code is 200', function () {&#10;    pm.response.to.have.status(200);&#10;});"
+                className="flex-1 min-h-[250px] bg-gray-900 border border-gray-800 rounded p-3 text-xs text-sky-300 font-mono outline-none focus:border-gray-700 resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* Snippets Sidebar */}
+            <div className="w-56 border-l border-gray-800/80 p-3 bg-gray-950/50 select-none">
+              <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Snippets
+              </div>
+              <div className="space-y-1 text-xs">
+                {[
+                  {
+                    label: 'Status code: Code is 200',
+                    code: 'pm.test("Status code is 200", function () {\n    pm.response.to.have.status(200);\n});\n',
+                  },
+                  {
+                    label: 'Response body: JSON value check',
+                    code: 'pm.test("Response body check", function () {\n    const jsonData = pm.response.json();\n    pm.expect(jsonData).to.have.property("data");\n});\n',
+                  },
+                  {
+                    label: 'Response time is less than 200ms',
+                    code: 'pm.test("Response time is less than 200ms", function () {\n    pm.expect(pm.response.responseTime).to.be.below(200);\n});\n',
+                  },
+                  {
+                    label: 'Set env variable from JSON response',
+                    code: 'const data = pm.response.json();\npm.environment.set("token", data.token || "value");\n',
+                  },
+                ].map((snip, i) => (
+                  <button
+                    key={i}
+                    onClick={() =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        postScript: (prev.postScript || '') + (prev.postScript ? '\n' : '') + snip.code,
+                      }))
+                    }
+                    className="w-full text-left p-1.5 rounded hover:bg-gray-800 text-orange-400 hover:text-orange-300 transition-colors text-[11px] truncate block"
+                  >
+                    {snip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

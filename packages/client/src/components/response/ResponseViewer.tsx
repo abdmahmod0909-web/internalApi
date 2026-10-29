@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
-import { Copy, Download, Search, Check, Clock, HardDrive, Info } from 'lucide-react';
+import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { JsonViewer } from './JsonViewer.js';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -11,13 +12,18 @@ function formatBytes(bytes: number): string {
 }
 
 export const ResponseViewer: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'pretty' | 'raw' | 'preview' | 'headers' | 'cookies'>('pretty');
+  const [activeTab, setActiveTab] = useState<'pretty' | 'raw' | 'preview' | 'headers' | 'cookies' | 'tests'>('pretty');
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const { tabs, activeTabId } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
   const response = currentTab?.response;
+  const testResults = currentTab?.testResults;
+  const scriptLogs = currentTab?.scriptLogs;
+
+  const passedTestsCount = testResults?.filter((t) => t.passed).length || 0;
+  const totalTestsCount = testResults?.length || 0;
 
   if (!response) {
     return (
@@ -122,17 +128,28 @@ export const ResponseViewer: React.FC = () => {
             { key: 'preview', label: 'Preview' },
             { key: 'headers', label: `Headers (${Object.keys(response.headers || {}).length})` },
             { key: 'cookies', label: `Cookies (${response.cookies?.length || 0})` },
-          ].map((tab) => (
+            ...(totalTestsCount > 0
+              ? [
+                  {
+                    key: 'tests',
+                    label: `Test Results (${passedTestsCount}/${totalTestsCount})`,
+                    badge: passedTestsCount === totalTestsCount ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400',
+                  },
+                ]
+              : currentTab?.request.postScript
+              ? [{ key: 'tests', label: 'Test Results' }]
+              : []),
+          ].map((tab: any) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
-              className={`py-2 px-2.5 text-xs font-medium border-b-2 transition-colors ${
+              className={`py-2 px-2.5 text-xs font-medium border-b-2 transition-colors flex items-center space-x-1 ${
                 activeTab === tab.key
                   ? 'border-orange-500 text-orange-500'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              {tab.label}
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
@@ -161,9 +178,7 @@ export const ResponseViewer: React.FC = () => {
         )}
 
         {activeTab === 'pretty' && (
-          <pre className="font-mono text-[11px] text-gray-200 leading-relaxed whitespace-pre-wrap select-text">
-            {formattedBody}
-          </pre>
+          <JsonViewer jsonString={response.body} searchTerm={searchTerm} />
         )}
 
         {activeTab === 'raw' && (
@@ -213,6 +228,74 @@ export const ResponseViewer: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'tests' && (
+          <div className="space-y-3">
+            {/* Summary Banner */}
+            <div className="flex items-center space-x-3 p-3 bg-gray-900 border border-gray-800 rounded">
+              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                passedTestsCount === totalTestsCount && totalTestsCount > 0
+                  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                  : 'bg-rose-950 text-rose-400 border border-rose-800'
+              }`}>
+                PASS {passedTestsCount} / {totalTestsCount}
+              </span>
+              <span className="text-xs text-gray-400">
+                {totalTestsCount === 0
+                  ? 'No test assertions were executed.'
+                  : `${passedTestsCount} out of ${totalTestsCount} test assertions passed.`}
+              </span>
+            </div>
+
+            {/* Test List */}
+            {testResults && testResults.length > 0 ? (
+              <div className="space-y-1.5">
+                {testResults.map((t, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-2.5 rounded border text-xs flex flex-col space-y-1 ${
+                      t.passed
+                        ? 'bg-emerald-950/20 border-emerald-900/60 text-emerald-300'
+                        : 'bg-rose-950/30 border-rose-900/60 text-rose-300'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 font-medium">
+                      {t.passed ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                      )}
+                      <span>{t.name}</span>
+                    </div>
+                    {t.error && (
+                      <div className="text-[11px] font-mono text-rose-400 pl-6">
+                        {t.error}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 text-xs">
+                Write test assertions in the <strong className="text-gray-400">Tests</strong> tab and send the request to see results.
+              </div>
+            )}
+
+            {/* Script Console Logs */}
+            {scriptLogs && scriptLogs.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-gray-800">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+                  Console Output
+                </div>
+                <div className="bg-gray-950 border border-gray-800 rounded p-2.5 font-mono text-[11px] text-gray-300 space-y-1">
+                  {scriptLogs.map((log, i) => (
+                    <div key={i}>{log}</div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

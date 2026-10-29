@@ -6,7 +6,9 @@ import type {
   ApiRequestData,
   ApiResponseData,
   HttpMethod,
+  TestResultItem,
 } from '@internalapi/shared';
+import { executeScript } from '@internalapi/shared';
 
 export interface TabItem {
   id: string;
@@ -15,6 +17,8 @@ export interface TabItem {
   isDirty: boolean;
   isLoading: boolean;
   response?: ApiResponseData;
+  testResults?: TestResultItem[];
+  scriptLogs?: string[];
 }
 
 const DEFAULT_NEW_REQUEST: ApiRequestData = {
@@ -196,15 +200,55 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   sendRequest: async (targetTabId) => {
-    const { tabs, activeTabId, activeEnvironmentId, activeWorkspaceId } = get();
+    const { tabs, activeTabId, activeEnvironmentId, activeWorkspaceId, environments, saveEnvironment } = get();
     const tabId = targetTabId || activeTabId;
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
     // Set loading
     set({
-      tabs: tabs.map((t) => (t.id === tabId ? { ...t, isLoading: true } : t)),
+      tabs: tabs.map((t) => (t.id === tabId ? { ...t, isLoading: true, testResults: undefined } : t)),
     });
+
+    const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
+    const envVars: Record<string, string> = {};
+    if (activeEnv) {
+      for (const v of activeEnv.variables) {
+        if (v.isEnabled && v.key) envVars[v.key] = v.value;
+      }
+    }
+
+    // 1. Run Pre-request Script if defined
+    if (tab.request.preScript) {
+      const preResult = executeScript(tab.request.preScript, {
+        environment: envVars,
+        variables: {},
+        request: {
+          url: tab.request.url,
+          method: tab.request.method,
+          headers: (tab.request.headers || []).reduce((acc, h) => {
+            if (h.isEnabled && h.key) acc[h.key] = h.value;
+            return acc;
+          }, {} as Record<string, string>),
+          body: tab.request.bodyContent,
+        },
+      });
+
+      // Apply environment updates from pre-request script
+      if (activeEnv && Object.keys(preResult.environmentMutations).length > 0) {
+        const updatedVars = [...activeEnv.variables];
+        for (const [k, val] of Object.entries(preResult.environmentMutations)) {
+          const strVal = String(val);
+          const idx = updatedVars.findIndex((v) => v.key === k);
+          if (idx >= 0) {
+            updatedVars[idx] = { ...updatedVars[idx], value: strVal };
+          } else {
+            updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
+          }
+        }
+        saveEnvironment({ ...activeEnv, variables: updatedVars });
+      }
+    }
 
     try {
       const res = await fetch('/api/proxy/send', {
@@ -219,9 +263,61 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const responseData: ApiResponseData = await res.json();
 
+      // 2. Run Tests / Post-response Script if defined
+      let testResults: TestResultItem[] = [];
+      let scriptLogs: string[] = [];
+
+      if (tab.request.postScript && responseData) {
+        const postResult = executeScript(tab.request.postScript, {
+          environment: envVars,
+          variables: {},
+          request: {
+            url: tab.request.url,
+            method: tab.request.method,
+            headers: (tab.request.headers || []).reduce((acc, h) => {
+              if (h.isEnabled && h.key) acc[h.key] = h.value;
+              return acc;
+            }, {} as Record<string, string>),
+          },
+          response: {
+            status: responseData.status,
+            statusText: responseData.statusText,
+            headers: responseData.headers,
+            body: responseData.body,
+            time: responseData.time,
+          },
+        });
+
+        testResults = postResult.tests;
+        scriptLogs = postResult.logs;
+
+        // Apply environment updates from tests script
+        if (activeEnv && Object.keys(postResult.environmentMutations).length > 0) {
+          const updatedVars = [...activeEnv.variables];
+          for (const [k, val] of Object.entries(postResult.environmentMutations)) {
+            const strVal = String(val);
+            const idx = updatedVars.findIndex((v) => v.key === k);
+            if (idx >= 0) {
+              updatedVars[idx] = { ...updatedVars[idx], value: strVal };
+            } else {
+              updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
+            }
+          }
+          saveEnvironment({ ...activeEnv, variables: updatedVars });
+        }
+      }
+
       set((state) => ({
         tabs: state.tabs.map((t) =>
-          t.id === tabId ? { ...t, response: responseData, isLoading: false } : t
+          t.id === tabId
+            ? {
+                ...t,
+                response: responseData,
+                testResults: testResults.length > 0 ? testResults : undefined,
+                scriptLogs: scriptLogs.length > 0 ? scriptLogs : undefined,
+                isLoading: false,
+              }
+            : t
         ),
       }));
 

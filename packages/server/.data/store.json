@@ -127,6 +127,76 @@
     {
       "workspaceId": "ws-default-company",
       "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 531,
+      "id": "hist-57345fc3-2c18-4048-b42c-6093d1d62dc4",
+      "createdAt": "2026-10-29T20:28:58.526Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 773,
+      "id": "hist-754cbbf7-a078-4680-8680-b7af5ffe0ad9",
+      "createdAt": "2026-10-29T20:28:27.196Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 263,
+      "time": 189,
+      "id": "hist-f24dcdc6-2b98-45ec-8ae4-abe5f6ea90aa",
+      "createdAt": "2026-10-29T20:28:22.753Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 263,
+      "time": 565,
+      "id": "hist-d09637fb-2ed7-40f2-b2c9-326f9be52220",
+      "createdAt": "2026-10-29T20:28:21.609Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 731,
+      "id": "hist-c5b89ae1-1d84-45ef-b01a-6cac9f7c1662",
+      "createdAt": "2026-10-29T20:28:17.192Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3117,
+      "time": 794,
+      "id": "hist-a24eb92c-7934-4007-b58c-414df1ac2dff",
+      "createdAt": "2026-10-29T20:26:19.528Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 263,
+      "time": 533,
+      "id": "hist-b2fefc5a-f939-416b-9d70-76763977ba69",
+      "createdAt": "2026-10-29T20:26:13.692Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
       "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
       "status": 200,
       "size": 3100,
