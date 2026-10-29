@@ -235,3 +235,4 @@ export async function deleteRemoteCollection(config: DatabaseConnectionConfig, c
 
   return false;
 }
+

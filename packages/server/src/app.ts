@@ -41,9 +41,15 @@ export function buildApp(): FastifyInstance {
   });
 
   // Serve static client build if present
-  const clientDistPath = path.resolve(process.cwd(), '../client/dist');
-  const localDistPath = path.resolve(process.cwd(), 'client/dist');
-  const staticPath = fs.existsSync(clientDistPath) ? clientDistPath : fs.existsSync(localDistPath) ? localDistPath : null;
+  const possibleDistPaths = [
+    path.resolve(process.cwd(), 'packages/client/dist'),
+    path.resolve(process.cwd(), '../client/dist'),
+    path.resolve(process.cwd(), 'client/dist'),
+    path.resolve(__dirname, '../../client/dist'),
+    path.resolve(__dirname, '../../../client/dist'),
+    path.resolve(__dirname, '../../../../packages/client/dist'),
+  ];
+  const staticPath = possibleDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) || null;
 
   if (staticPath) {
     app.register(fastifyStatic, {

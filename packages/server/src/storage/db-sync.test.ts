@@ -59,3 +59,4 @@ describe('db-sync configuration and validation', () => {
     expect(result.message).toContain('required');
   });
 });
+
