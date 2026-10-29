@@ -5722,6 +5722,16 @@
       "url": "https://httpbin.org/get",
       "status": 200,
       "size": 261,
+      "time": 529,
+      "id": "hist-d587f91b-bba6-41d0-a177-ecf1870d5ee4",
+      "createdAt": "2026-10-29T21:36:56.895Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
       "time": 577,
       "id": "hist-a4517266-292e-481a-ab57-315c97d2b439",
       "createdAt": "2026-10-29T21:15:31.176Z"
