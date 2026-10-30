@@ -126,12 +126,12 @@ export const RequestBuilder: React.FC = () => {
         <div className="flex items-center space-x-2 flex-1 min-w-0">
           <input
             type="text"
-            value={req.name || currentTab.name || 'Untitled Request'}
+            value={req.name ?? ''}
             onChange={(e) => {
               const newName = e.target.value;
               updateActiveRequest((prev) => ({ ...prev, name: newName }));
             }}
-            placeholder="Request Name"
+            placeholder="Untitled Request"
             className="bg-transparent hover:bg-gray-900 focus:bg-gray-900 border border-transparent hover:border-gray-800 focus:border-orange-500 rounded px-2 py-1 text-sm font-semibold text-gray-100 placeholder-gray-500 outline-none transition-colors w-full max-w-sm truncate"
             title="Click to rename request"
           />

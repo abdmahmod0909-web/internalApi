@@ -43,7 +43,7 @@ export const TabBar: React.FC = () => {
               <span className={`text-[10px] font-bold ${methodColor}`}>
                 {tab.request.method}
               </span>
-              <span className="max-w-[120px] truncate">{tab.name}</span>
+              <span className="max-w-[120px] truncate">{tab.name || 'Untitled Request'}</span>
               {tab.isDirty && <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>}
               <button
                 onClick={(e) => {

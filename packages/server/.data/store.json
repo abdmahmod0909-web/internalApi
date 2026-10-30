@@ -5711,11 +5711,185 @@
           "bodyUrlEncoded": [],
           "preScript": "",
           "postScript": ""
+        },
+        {
+          "name": "new test",
+          "method": "GET",
+          "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+          "queryParams": [
+            {
+              "id": "qp-1793358076664-0.9616284111039564",
+              "key": "exam_id",
+              "value": "5762",
+              "isEnabled": true
+            }
+          ],
+          "headers": [
+            {
+              "id": "h-1793358076663-0.05424969624242837",
+              "key": "accept",
+              "value": "application/json, text/plain, */*",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.0007906170751150743",
+              "key": "accept-language",
+              "value": "en-US,en;q=0.9",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.7178238304692648",
+              "key": "api",
+              "value": "1",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.6775835876011966",
+              "key": "authorization",
+              "value": "Bearer 7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.06788421228249408",
+              "key": "cache-control",
+              "value": "no-cache",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.6620839933908229",
+              "key": "lang",
+              "value": "ar",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.8100063164061235",
+              "key": "origin",
+              "value": "https://new-pre-prod.d18axrryrol4bb.amplifyapp.com",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.11076086502024696",
+              "key": "pragma",
+              "value": "no-cache",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.06159911898950643",
+              "key": "priority",
+              "value": "u=1, i",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.6260248068084016",
+              "key": "program",
+              "value": "1",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.995009936973386",
+              "key": "referer",
+              "value": "https://new-pre-prod.d18axrryrol4bb.amplifyapp.com/",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.3651535527338474",
+              "key": "sec-ch-ua",
+              "value": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.6412872112877845",
+              "key": "sec-ch-ua-mobile",
+              "value": "?0",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.07277404327941883",
+              "key": "sec-ch-ua-platform",
+              "value": "\"Windows\"",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.826319026301976",
+              "key": "sec-fetch-dest",
+              "value": "empty",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.48571738484210947",
+              "key": "sec-fetch-mode",
+              "value": "cors",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.3094864938840054",
+              "key": "sec-fetch-site",
+              "value": "cross-site",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.7895709244988958",
+              "key": "shouldnotredirect401",
+              "value": "true",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076663-0.9093952690412999",
+              "key": "shouldnotredirect404",
+              "value": "true",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793358076664-0.8386115973123618",
+              "key": "user-agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+              "isEnabled": true
+            }
+          ],
+          "pathVars": [],
+          "auth": {
+            "type": "bearer",
+            "bearer": {
+              "token": "7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85"
+            }
+          },
+          "bodyType": "none",
+          "bodyContent": "",
+          "settings": {
+            "timeoutMs": 30000,
+            "followRedirects": true,
+            "verifySsl": true
+          },
+          "bodyFormData": [],
+          "bodyUrlEncoded": [],
+          "id": "req-1793358078531",
+          "collectionId": "col-1793307616625-of8wq",
+          "folderId": null
         }
       ]
     }
   ],
   "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 200,
+      "size": 261,
+      "time": 545,
+      "id": "hist-4796b4e9-4343-4d8d-889a-c45a863dfe7f",
+      "createdAt": "2026-10-30T11:08:06.093Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3113,
+      "time": 916,
+      "id": "hist-bb7aa59e-ab1d-42e5-a437-b1c99dd32414",
+      "createdAt": "2026-10-30T11:01:20.760Z"
+    },
     {
       "workspaceId": "ws-default-company",
       "method": "GET",

@@ -23,11 +23,11 @@ export interface TabItem {
 }
 
 const DEFAULT_NEW_REQUEST: ApiRequestData = {
-  name: 'Untitled Request',
+  name: '',
   method: 'GET',
-  url: 'https://httpbin.org/get',
-  queryParams: [{ id: '1', key: '', value: '', isEnabled: true }],
-  headers: [{ id: '1', key: 'Accept', value: 'application/json', isEnabled: true }],
+  url: '',
+  queryParams: [],
+  headers: [],
   pathVars: [],
   auth: { type: 'none' },
   bodyType: 'none',
@@ -109,14 +109,25 @@ function getInitialTabs(): TabItem[] {
     try {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((t) => ({ ...t, isLoading: false }));
+        return parsed.map((t) => {
+          // If a saved tab was just the old untouched default dummy request, clean it to empty
+          if (t.request?.url === 'https://httpbin.org/get' && !t.isDirty) {
+            return {
+              ...t,
+              name: '',
+              request: { ...DEFAULT_NEW_REQUEST },
+              isLoading: false,
+            };
+          }
+          return { ...t, isLoading: false };
+        });
       }
     } catch {}
   }
   return [
     {
       id: 'tab-1',
-      name: 'Untitled Request',
+      name: '',
       request: { ...DEFAULT_NEW_REQUEST },
       isDirty: false,
       isLoading: false,
@@ -257,7 +268,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       ...tabs,
       {
         id: tabId,
-        name: newReq.name || 'Untitled Request',
+        name: newReq.name || '',
         request: newReq,
         isDirty: false,
         isLoading: false,
@@ -278,7 +289,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const resetTabs = [
         {
           id: `tab-${Date.now()}`,
-          name: 'Untitled Request',
+          name: '',
           request: { ...DEFAULT_NEW_REQUEST },
           isDirty: false,
           isLoading: false,
@@ -489,6 +500,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updatedCol = { ...targetCol };
     const savedReq: ApiRequestData = {
       ...req,
+      name: req.name?.trim() || 'Untitled Request',
       id: req.id || `req-${Date.now()}`,
       collectionId: colId,
       folderId: folderId ?? req.folderId ?? null,
