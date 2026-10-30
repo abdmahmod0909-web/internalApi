@@ -5,7 +5,9 @@ import { Sidebar } from './components/Sidebar.js';
 import { TabBar } from './components/TabBar.js';
 import { RequestBuilder } from './components/request/RequestBuilder.js';
 import { ResponseViewer } from './components/response/ResponseViewer.js';
+import { FlowBuilder } from './components/flows/FlowBuilder.js';
 import { EnvironmentModal } from './components/environments/EnvironmentModal.js';
+import { WorkspaceModal } from './components/workspaces/WorkspaceModal.js';
 import { CommandPalette } from './components/common/CommandPalette.js';
 import { ImportModal } from './components/common/ImportModal.js';
 import { GripVertical, GripHorizontal } from 'lucide-react';
@@ -21,6 +23,7 @@ export const App: React.FC = () => {
     layout,
     isImportModalOpen,
     setImportModalOpen,
+    activeView,
   } = useAppStore();
 
   const [isDragging, setIsDragging] = useState(false);
@@ -107,72 +110,77 @@ export const App: React.FC = () => {
         {/* Left Sidebar */}
         <Sidebar />
 
-        {/* Center/Right Request & Response Area */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <TabBar />
+        {/* Center/Right Content Area: Either Flow Canvas or Request Tabs/Panes */}
+        {activeView === 'flows' ? (
+          <FlowBuilder />
+        ) : (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <TabBar />
 
-          {/* Resizable Split View: Request Builder & Response Viewer */}
-          <div
-            ref={containerRef}
-            className={`flex flex-1 overflow-hidden relative ${
-              isHorizontal ? 'flex-row' : 'flex-col'
-            }`}
-          >
-            {/* First Pane: Request Builder (Left in horizontal, Top in vertical) */}
+            {/* Resizable Split View: Request Builder & Response Viewer */}
             <div
-              style={
-                isHorizontal
-                  ? { width: `${splitRatio}%`, height: '100%' }
-                  : { height: `${splitRatio}%`, width: '100%' }
-              }
-              className="flex flex-col overflow-hidden shrink-0"
-            >
-              <RequestBuilder />
-            </div>
-
-            {/* Draggable Divider Bar */}
-            <div
-              onMouseDown={handleMouseDown}
-              className={`relative select-none shrink-0 transition-colors z-10 flex items-center justify-center ${
-                isHorizontal
-                  ? 'w-1.5 h-full cursor-col-resize'
-                  : 'h-1.5 w-full cursor-row-resize'
-              } ${
-                isDragging
-                  ? 'bg-orange-500'
-                  : 'bg-gray-800 hover:bg-orange-500/80'
+              ref={containerRef}
+              className={`flex flex-1 overflow-hidden relative ${
+                isHorizontal ? 'flex-row' : 'flex-col'
               }`}
-              title={isHorizontal ? 'Drag horizontally to resize' : 'Drag vertically to resize'}
             >
+              {/* First Pane: Request Builder (Left in horizontal, Top in vertical) */}
               <div
-                className={`flex items-center justify-center text-gray-500 pointer-events-none opacity-40 hover:opacity-100 ${
-                  isHorizontal ? 'w-4 h-8' : 'w-8 h-4'
-                }`}
+                style={
+                  isHorizontal
+                    ? { width: `${splitRatio}%`, height: '100%' }
+                    : { height: `${splitRatio}%`, width: '100%' }
+                }
+                className="flex flex-col overflow-hidden shrink-0"
               >
-                {isHorizontal ? (
-                  <GripVertical className="w-3.5 h-3.5" />
-                ) : (
-                  <GripHorizontal className="w-3.5 h-3.5" />
-                )}
+                <RequestBuilder />
+              </div>
+
+              {/* Draggable Divider Bar */}
+              <div
+                onMouseDown={handleMouseDown}
+                className={`relative select-none shrink-0 transition-colors z-10 flex items-center justify-center ${
+                  isHorizontal
+                    ? 'w-1.5 h-full cursor-col-resize'
+                    : 'h-1.5 w-full cursor-row-resize'
+                } ${
+                  isDragging
+                    ? 'bg-orange-500'
+                    : 'bg-gray-800 hover:bg-orange-500/80'
+                }`}
+                title={isHorizontal ? 'Drag horizontally to resize' : 'Drag vertically to resize'}
+              >
+                <div
+                  className={`flex items-center justify-center text-gray-500 pointer-events-none opacity-40 hover:opacity-100 ${
+                    isHorizontal ? 'w-4 h-8' : 'w-8 h-4'
+                  }`}
+                >
+                  {isHorizontal ? (
+                    <GripVertical className="w-3.5 h-3.5" />
+                  ) : (
+                    <GripHorizontal className="w-3.5 h-3.5" />
+                  )}
+                </div>
+              </div>
+
+              {/* Second Pane: Response Viewer (Right in horizontal, Bottom in vertical) */}
+              <div
+                style={
+                  isHorizontal
+                    ? { width: `${100 - splitRatio}%`, height: '100%' }
+                    : { height: `${100 - splitRatio}%`, width: '100%' }
+                }
+                className="flex flex-col overflow-hidden shrink-0"
+              >
+                <ResponseViewer />
               </div>
             </div>
-
-            {/* Second Pane: Response Viewer (Right in horizontal, Bottom in vertical) */}
-            <div
-              style={
-                isHorizontal
-                  ? { width: `${100 - splitRatio}%`, height: '100%' }
-                  : { height: `${100 - splitRatio}%`, width: '100%' }
-              }
-              className="flex flex-col overflow-hidden shrink-0"
-            >
-              <ResponseViewer />
-            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Modals */}
+      <WorkspaceModal />
       <EnvironmentModal />
       <CommandPalette />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} />

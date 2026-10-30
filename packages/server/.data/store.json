@@ -1,12 +1,5 @@
 {
-  "workspaces": [
-    {
-      "id": "ws-default-company",
-      "name": "Company Internal APIs",
-      "description": "Default company workspace for internal and microservice testing",
-      "isDefault": true
-    }
-  ],
+  "workspaces": [],
   "environments": [],
   "collections": [
     {
@@ -5874,6 +5867,26 @@
       "workspaceId": "ws-default-company",
       "method": "GET",
       "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-6a2d21bc-43c1-4e90-8bd7-be5c5d0b42e9",
+      "createdAt": "2026-10-30T11:19:02.209Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-5640305c-03a4-452a-847f-2f52bb2b2021",
+      "createdAt": "2026-10-30T11:18:14.090Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
       "status": 200,
       "size": 261,
       "time": 545,
@@ -6240,5 +6253,6 @@
       "id": "hist-e25b3c8f-88e5-4915-9c03-c23c22a8d6be",
       "createdAt": "2026-10-29T20:09:35.482Z"
     }
-  ]
+  ],
+  "flows": []
 }

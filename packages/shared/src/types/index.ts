@@ -181,3 +181,67 @@ export interface Workspace {
   isDefault?: boolean;
 }
 
+export type FlowNodeType = 'start' | 'request' | 'extract' | 'delay' | 'condition' | 'output';
+
+export interface FlowNode {
+  id: string;
+  type: FlowNodeType;
+  title: string;
+  config: {
+    // start node
+    initialVars?: Array<{ key: string; value: string }>;
+    // request node
+    method?: HttpMethod;
+    url?: string;
+    headers?: KeyValueItem[];
+    bodyType?: BodyType;
+    bodyContent?: string;
+    collectionRequestId?: string;
+    // extract node
+    extractVarName?: string;
+    extractPath?: string; // e.g. "token", "data.user.id", "status"
+    // delay node
+    delayMs?: number;
+    // condition node
+    conditionField?: string; // e.g. "response.status" or "token"
+    conditionOperator?: '==' | '!=' | '>' | '<' | 'contains';
+    conditionValue?: string;
+    // output/log node
+    logMessage?: string;
+  };
+}
+
+export interface Flow {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description?: string;
+  nodes: FlowNode[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FlowStepLog {
+  nodeId: string;
+  nodeTitle: string;
+  type: FlowNodeType;
+  status: 'pending' | 'running' | 'success' | 'failed' | 'skipped';
+  durationMs?: number;
+  httpStatus?: number;
+  message?: string;
+  data?: any;
+}
+
+export interface FlowExecutionReport {
+  flowId: string;
+  status: 'idle' | 'running' | 'success' | 'failed';
+  currentStepIndex: number;
+  totalSteps: number;
+  startTime?: string;
+  endTime?: string;
+  durationMs?: number;
+  variables: Record<string, any>;
+  logs: FlowStepLog[];
+}
+
+

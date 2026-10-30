@@ -8,8 +8,13 @@ import type {
   ApiResponseData,
   HttpMethod,
   TestResultItem,
+  Flow,
+  FlowNode,
+  FlowNodeType,
+  FlowExecutionReport,
+  FlowStepLog,
 } from '@internalapi/shared';
-import { executeScript } from '@internalapi/shared';
+import { executeScript, interpolateVariables } from '@internalapi/shared';
 
 export interface TabItem {
   id: string;
@@ -42,6 +47,7 @@ const DEFAULT_NEW_REQUEST: ApiRequestData = {
 interface AppState {
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  isWorkspaceModalOpen: boolean;
   environments: Environment[];
   activeEnvironmentId: string | null;
   collections: Collection[];
@@ -55,15 +61,39 @@ interface AppState {
   splitRatio: number;
   layout: 'horizontal' | 'vertical';
 
+  // Flows state
+  activeView: 'requests' | 'flows';
+  flows: Flow[];
+  activeFlowId: string | null;
+  flowReport: FlowExecutionReport | null;
+  isFlowRunning: boolean;
+
   // Actions
   setCommandPaletteOpen: (open: boolean) => void;
   setEnvModalOpen: (open: boolean) => void;
   setImportModalOpen: (open: boolean) => void;
+  setWorkspaceModalOpen: (open: boolean) => void;
   setTheme: (theme: 'dark' | 'midnight' | 'light') => void;
   setSplitRatio: (ratio: number) => void;
   setLayout: (layout: 'horizontal' | 'vertical') => void;
+  setActiveView: (view: 'requests' | 'flows') => void;
   loadInitialData: () => Promise<void>;
   setActiveEnvironmentId: (id: string | null) => void;
+
+  // Workspaces actions
+  createWorkspace: (name: string, description?: string) => Promise<Workspace | undefined>;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
+
+  // Flows actions
+  loadFlows: () => Promise<void>;
+  setActiveFlowId: (id: string | null) => void;
+  createFlow: (name?: string, description?: string, template?: 'blank' | 'auth_fetch' | 'create_verify') => Promise<Flow | undefined>;
+  saveFlow: (flow: Flow) => Promise<void>;
+  deleteFlow: (id: string) => Promise<void>;
+  runFlow: (flowId: string) => Promise<void>;
+  stopFlow: () => void;
+
   openTab: (request?: Partial<ApiRequestData>, customId?: string) => void;
   closeTab: (tabId: string) => void;
   setActiveTabId: (tabId: string) => void;
@@ -162,7 +192,8 @@ const initialActiveTabId = getStoredItem('internalapi_active_tab_id', initialTab
 
 export const useAppStore = create<AppState>((set, get) => ({
   workspaces: [],
-  activeWorkspaceId: 'ws-default-company',
+  activeWorkspaceId: getStoredItem('internalapi_active_workspace_id', 'ws-default-company'),
+  isWorkspaceModalOpen: false,
   environments: getInitialEnvironments(),
   activeEnvironmentId: 'env-development',
   collections: getInitialCollections(),
@@ -176,9 +207,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   splitRatio: parseFloat(getStoredItem('internalapi_split_ratio', '50')),
   layout: (getStoredItem('internalapi_layout', 'horizontal') as any),
 
+  // Flows state
+  activeView: 'requests',
+  flows: [],
+  activeFlowId: null,
+  flowReport: null,
+  isFlowRunning: false,
+
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
   setEnvModalOpen: (open) => set({ isEnvModalOpen: open }),
   setImportModalOpen: (open) => set({ isImportModalOpen: open }),
+  setWorkspaceModalOpen: (open) => set({ isWorkspaceModalOpen: open }),
+  setActiveView: (view) => set({ activeView: view }),
+  setActiveFlowId: (id) => set({ activeFlowId: id, activeView: id ? 'flows' : get().activeView }),
   setTheme: (theme) => {
     setStoredItem('internalapi_theme', theme);
     if (typeof document !== 'undefined') {
@@ -197,17 +238,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadInitialData: async () => {
     try {
-      const [wsRes, envRes, colRes, histRes] = await Promise.all([
+      const activeWs = get().activeWorkspaceId;
+      const [wsRes, envRes, colRes, histRes, flowRes] = await Promise.all([
         fetch('/api/workspaces').then((r) => r.json()).catch(() => []),
-        fetch('/api/environments').then((r) => r.json()).catch(() => []),
-        fetch('/api/collections').then((r) => r.json()).catch(() => []),
-        fetch('/api/history').then((r) => r.json()).catch(() => []),
+        fetch(`/api/environments?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        fetch(`/api/collections?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        fetch(`/api/history?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        fetch(`/api/flows?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
       ]);
 
       const workspaces = Array.isArray(wsRes) ? wsRes : [];
       const fetchedEnvs = Array.isArray(envRes) ? envRes : [];
       const fetchedCols = Array.isArray(colRes) ? colRes : [];
       const history = Array.isArray(histRes) ? histRes : [];
+      const flows = Array.isArray(flowRes) ? flowRes : [];
 
       const environments = fetchedEnvs.length > 0 ? fetchedEnvs : get().environments;
       const collections = fetchedCols.length > 0 ? fetchedCols : get().collections;
@@ -217,6 +261,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         environments,
         collections,
         history,
+        flows,
         activeEnvironmentId: environments.length > 0 ? environments[0].id : null,
       });
 
@@ -789,6 +834,549 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeWorkspaceId } = get();
     await fetch(`/api/history?workspaceId=${activeWorkspaceId}`, { method: 'DELETE' });
     set({ history: [] });
+  },
+
+  // Workspace Actions
+  createWorkspace: async (name: string, description?: string) => {
+    try {
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description }),
+      });
+      const newWs = await res.json();
+      if (newWs && newWs.id) {
+        set((state) => ({
+          workspaces: [...state.workspaces, newWs],
+          activeWorkspaceId: newWs.id,
+          isWorkspaceModalOpen: false,
+        }));
+        setStoredItem('internalapi_active_workspace_id', newWs.id);
+        await get().loadCollections();
+        await get().loadFlows();
+        await get().refreshHistory();
+        return newWs;
+      }
+    } catch (e) {
+      console.error('Failed to create workspace:', e);
+    }
+  },
+
+  switchWorkspace: async (workspaceId: string) => {
+    set({ activeWorkspaceId: workspaceId, activeFlowId: null });
+    setStoredItem('internalapi_active_workspace_id', workspaceId);
+    await get().loadCollections();
+    await get().loadFlows();
+    await get().refreshHistory();
+  },
+
+  deleteWorkspace: async (workspaceId: string) => {
+    try {
+      await fetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });
+      const remaining = get().workspaces.filter((w) => w.id !== workspaceId);
+      const nextActive = remaining[0]?.id || 'ws-default-company';
+      set({ workspaces: remaining, activeWorkspaceId: nextActive, activeFlowId: null });
+      setStoredItem('internalapi_active_workspace_id', nextActive);
+      await get().loadCollections();
+      await get().loadFlows();
+      await get().refreshHistory();
+    } catch (e) {
+      console.error('Failed to delete workspace:', e);
+    }
+  },
+
+  // Flows Actions
+  loadFlows: async () => {
+    const { activeWorkspaceId } = get();
+    try {
+      const res = await fetch(`/api/flows?workspaceId=${activeWorkspaceId}`).then((r) => r.json());
+      if (Array.isArray(res)) {
+        set({ flows: res });
+        if (get().activeFlowId && !res.some((f) => f.id === get().activeFlowId)) {
+          set({ activeFlowId: res[0]?.id || null });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load flows:', e);
+    }
+  },
+
+  createFlow: async (name = 'New API Flow', description = '', template = 'blank') => {
+    const { activeWorkspaceId } = get();
+    let initialNodes: FlowNode[] = [];
+
+    if (template === 'auth_fetch') {
+      initialNodes = [
+        {
+          id: `node-${Date.now()}-1`,
+          type: 'start',
+          title: 'Start: Configuration',
+          config: {
+            initialVars: [
+              { key: 'baseUrl', value: 'https://httpbin.org' },
+              { key: 'username', value: 'developer' },
+            ],
+          },
+        },
+        {
+          id: `node-${Date.now()}-2`,
+          type: 'request',
+          title: 'Request: Authenticate',
+          config: {
+            method: 'POST',
+            url: '{{baseUrl}}/post',
+            headers: [{ id: 'h-1', key: 'Content-Type', value: 'application/json', isEnabled: true }],
+            bodyType: 'json',
+            bodyContent: '{\n  "user": "{{username}}",\n  "token": "tok_flow_sec_884"\n}',
+          },
+        },
+        {
+          id: `node-${Date.now()}-3`,
+          type: 'extract',
+          title: 'Extract: Auth Token',
+          config: {
+            extractVarName: 'authToken',
+            extractPath: 'json.token',
+          },
+        },
+        {
+          id: `node-${Date.now()}-4`,
+          type: 'delay',
+          title: 'Delay: Network Wait',
+          config: {
+            delayMs: 300,
+          },
+        },
+        {
+          id: `node-${Date.now()}-5`,
+          type: 'request',
+          title: 'Request: Fetch Secured Headers',
+          config: {
+            method: 'GET',
+            url: '{{baseUrl}}/headers',
+            headers: [{ id: 'h-2', key: 'Authorization', value: 'Bearer {{authToken}}', isEnabled: true }],
+            bodyType: 'none',
+          },
+        },
+        {
+          id: `node-${Date.now()}-6`,
+          type: 'output',
+          title: 'Output: Verify Complete',
+          config: {
+            logMessage: 'Authentication verified! Authorized token: {{authToken}}',
+          },
+        },
+      ];
+    } else if (template === 'create_verify') {
+      initialNodes = [
+        {
+          id: `node-${Date.now()}-1`,
+          type: 'start',
+          title: 'Start: Setup Payload',
+          config: {
+            initialVars: [
+              { key: 'apiUrl', value: 'https://httpbin.org' },
+              { key: 'itemName', value: 'Widget-A1' },
+            ],
+          },
+        },
+        {
+          id: `node-${Date.now()}-2`,
+          type: 'request',
+          title: 'Request: Create Resource',
+          config: {
+            method: 'POST',
+            url: '{{apiUrl}}/post',
+            headers: [{ id: 'h-1', key: 'Content-Type', value: 'application/json', isEnabled: true }],
+            bodyType: 'json',
+            bodyContent: '{\n  "name": "{{itemName}}",\n  "status": "ready"\n}',
+          },
+        },
+        {
+          id: `node-${Date.now()}-3`,
+          type: 'extract',
+          title: 'Extract: Verified Status',
+          config: {
+            extractVarName: 'resourceStatus',
+            extractPath: 'json.status',
+          },
+        },
+        {
+          id: `node-${Date.now()}-4`,
+          type: 'condition',
+          title: 'Condition: Assert Status is ready',
+          config: {
+            conditionField: '{{resourceStatus}}',
+            conditionOperator: '==',
+            conditionValue: 'ready',
+          },
+        },
+        {
+          id: `node-${Date.now()}-5`,
+          type: 'output',
+          title: 'Output: Success Summary',
+          config: {
+            logMessage: 'Resource {{itemName}} verified with status: {{resourceStatus}}',
+          },
+        },
+      ];
+    } else {
+      // Default Blank Flow
+      initialNodes = [
+        {
+          id: `node-${Date.now()}-1`,
+          type: 'start',
+          title: 'Start: Base Parameters',
+          config: {
+            initialVars: [{ key: 'baseUrl', value: 'https://httpbin.org' }],
+          },
+        },
+        {
+          id: `node-${Date.now()}-2`,
+          type: 'request',
+          title: 'Request: Ping Service',
+          config: {
+            method: 'GET',
+            url: '{{baseUrl}}/get',
+            headers: [],
+            bodyType: 'none',
+          },
+        },
+        {
+          id: `node-${Date.now()}-3`,
+          type: 'output',
+          title: 'Output: Status Report',
+          config: {
+            logMessage: 'Ping service completed! Status: {{lastStatus}}',
+          },
+        },
+      ];
+    }
+
+    const newFlow: Flow = {
+      id: `flow-${Date.now()}`,
+      workspaceId: activeWorkspaceId,
+      name,
+      description,
+      nodes: initialNodes,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      const res = await fetch('/api/flows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFlow),
+      });
+      const saved = await res.json();
+      set((state) => ({
+        flows: [...state.flows, saved],
+        activeFlowId: saved.id,
+        activeView: 'flows',
+      }));
+      return saved;
+    } catch (e) {
+      console.error('Failed to create flow:', e);
+    }
+  },
+
+  saveFlow: async (flow: Flow) => {
+    try {
+      const res = await fetch('/api/flows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(flow),
+      });
+      const saved = await res.json();
+      set((state) => ({
+        flows: state.flows.map((f) => (f.id === flow.id ? saved : f)),
+      }));
+    } catch (e) {
+      console.error('Failed to save flow:', e);
+    }
+  },
+
+  deleteFlow: async (id: string) => {
+    try {
+      await fetch(`/api/flows/${id}`, { method: 'DELETE' });
+      set((state) => ({
+        flows: state.flows.filter((f) => f.id !== id),
+        activeFlowId: state.activeFlowId === id ? null : state.activeFlowId,
+      }));
+    } catch (e) {
+      console.error('Failed to delete flow:', e);
+    }
+  },
+
+  stopFlow: () => {
+    set({ isFlowRunning: false });
+  },
+
+  runFlow: async (flowId: string) => {
+    const { flows, activeEnvironmentId, activeWorkspaceId, environments } = get();
+    const flow = flows.find((f) => f.id === flowId);
+    if (!flow || !flow.nodes || flow.nodes.length === 0) return;
+
+    // Load active environment variables
+    const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
+    const baseVars: Record<string, string> = {};
+    if (activeEnv) {
+      for (const v of activeEnv.variables) {
+        if (v.isEnabled && v.key) baseVars[v.key] = v.value;
+      }
+    }
+
+    const runtimeVars: Record<string, any> = { ...baseVars };
+    const logs: FlowStepLog[] = [];
+    const initialReport: FlowExecutionReport = {
+      flowId,
+      status: 'running',
+      currentStepIndex: 0,
+      totalSteps: flow.nodes.length,
+      startTime: new Date().toISOString(),
+      variables: { ...runtimeVars },
+      logs: [],
+    };
+
+    set({ isFlowRunning: true, flowReport: initialReport });
+
+    let lastResponse: ApiResponseData | null = null;
+    let hasFailed = false;
+
+    for (let i = 0; i < flow.nodes.length; i++) {
+      if (!get().isFlowRunning) {
+        logs.push({
+          nodeId: flow.nodes[i].id,
+          nodeTitle: flow.nodes[i].title,
+          type: flow.nodes[i].type,
+          status: 'skipped',
+          message: 'Flow cancelled by user',
+        });
+        break;
+      }
+
+      const node = flow.nodes[i];
+      const stepLog: FlowStepLog = {
+        nodeId: node.id,
+        nodeTitle: node.title,
+        type: node.type,
+        status: 'running',
+      };
+
+      set((state) => ({
+        flowReport: state.flowReport
+          ? {
+              ...state.flowReport,
+              currentStepIndex: i,
+              logs: [...logs, stepLog],
+              variables: { ...runtimeVars },
+            }
+          : null,
+      }));
+
+      const tStart = performance.now();
+
+      try {
+        if (node.type === 'start') {
+          if (Array.isArray(node.config.initialVars)) {
+            for (const item of node.config.initialVars) {
+              if (item.key) runtimeVars[item.key] = item.value;
+            }
+          }
+          stepLog.status = 'success';
+          stepLog.message = `Initialized ${node.config.initialVars?.length || 0} variable(s)`;
+        } else if (node.type === 'request') {
+          const stringVars: Record<string, string> = {};
+          for (const [k, v] of Object.entries(runtimeVars)) {
+            stringVars[k] = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+          }
+
+          const rawUrl = node.config.url || '';
+          const resolvedUrl = interpolateVariables(rawUrl, stringVars);
+          const resolvedBody = node.config.bodyContent
+            ? interpolateVariables(node.config.bodyContent, stringVars)
+            : '';
+
+          const resolvedHeaders = (node.config.headers || []).map((h) => ({
+            ...h,
+            value: interpolateVariables(h.value, stringVars),
+          }));
+
+          const reqData: ApiRequestData = {
+            name: node.title,
+            method: node.config.method || 'GET',
+            url: resolvedUrl,
+            queryParams: [],
+            headers: resolvedHeaders,
+            pathVars: [],
+            auth: { type: 'none' },
+            bodyType: node.config.bodyType || 'json',
+            bodyContent: resolvedBody,
+            settings: { timeoutMs: 30000, followRedirects: true, verifySsl: true },
+          };
+
+          const res = await fetch('/api/proxy/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              request: reqData,
+              environmentId: activeEnvironmentId,
+              workspaceId: activeWorkspaceId,
+            }),
+          });
+
+          const resp: ApiResponseData = await res.json();
+          lastResponse = resp;
+          runtimeVars['lastStatus'] = resp.status;
+          runtimeVars['lastStatusText'] = resp.statusText;
+
+          let parsedBody = resp.body;
+          try {
+            if (typeof resp.body === 'string') {
+              parsedBody = JSON.parse(resp.body);
+            }
+          } catch {}
+          runtimeVars['lastBody'] = parsedBody;
+
+          stepLog.httpStatus = resp.status;
+          stepLog.durationMs = Math.round(performance.now() - tStart);
+          stepLog.data = {
+            url: resolvedUrl,
+            method: node.config.method || 'GET',
+            status: resp.status,
+            time: resp.time,
+            bodySnippet:
+              typeof resp.body === 'string'
+                ? resp.body.slice(0, 300)
+                : JSON.stringify(resp.body).slice(0, 300),
+          };
+
+          if (resp.status >= 200 && resp.status < 400) {
+            stepLog.status = 'success';
+            stepLog.message = `${node.config.method || 'GET'} ${resolvedUrl} -> ${resp.status} ${resp.statusText || 'OK'} (${resp.time}ms)`;
+          } else {
+            stepLog.status = 'failed';
+            stepLog.message = `HTTP ${resp.status}: ${resp.statusText || 'Error response'}`;
+            hasFailed = true;
+          }
+        } else if (node.type === 'extract') {
+          const varName = node.config.extractVarName?.trim();
+          const path = node.config.extractPath?.trim();
+          if (!varName) {
+            stepLog.status = 'failed';
+            stepLog.message = 'No variable name specified';
+            hasFailed = true;
+          } else if (!lastResponse) {
+            stepLog.status = 'failed';
+            stepLog.message = 'No prior HTTP response found to extract from';
+            hasFailed = true;
+          } else {
+            const sourceObj = runtimeVars['lastBody'];
+            let val: any = undefined;
+
+            if (path === 'status') {
+              val = lastResponse.status;
+            } else if (path?.startsWith('headers.')) {
+              const hKey = path.slice(8).toLowerCase();
+              val = (lastResponse.headers as any)?.[hKey] || (lastResponse.headers as any)?.[path.slice(8)];
+            } else if (path) {
+              const cleanPath = path.replace(/^(body|data|json)\./, '');
+              const parts = cleanPath.split('.');
+              let curr = sourceObj;
+              // If sourceObj has 'json' wrapper or 'data' wrapper
+              if (path.startsWith('json.') && sourceObj && sourceObj.json) {
+                curr = sourceObj.json;
+              }
+              for (const part of parts) {
+                if (curr == null) break;
+                curr = curr[part];
+              }
+              val = curr !== undefined ? curr : sourceObj?.[cleanPath];
+            } else {
+              val = sourceObj;
+            }
+
+            runtimeVars[varName] = val;
+            stepLog.status = 'success';
+            stepLog.message = `Extracted variable {{${varName}}} = ${JSON.stringify(val)}`;
+            stepLog.data = { variable: varName, value: val };
+          }
+        } else if (node.type === 'delay') {
+          const ms = Number(node.config.delayMs) || 500;
+          await new Promise((r) => setTimeout(r, ms));
+          stepLog.status = 'success';
+          stepLog.message = `Waited ${ms}ms`;
+          stepLog.durationMs = Math.round(performance.now() - tStart);
+        } else if (node.type === 'condition') {
+          const stringVars: Record<string, string> = {};
+          for (const [k, v] of Object.entries(runtimeVars)) {
+            stringVars[k] = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+          }
+          const fieldVal = interpolateVariables(node.config.conditionField || '', stringVars);
+          const targetVal = interpolateVariables(node.config.conditionValue || '', stringVars);
+          const op = node.config.conditionOperator || '==';
+
+          let passed = false;
+          if (op === '==') passed = String(fieldVal) === String(targetVal);
+          else if (op === '!=') passed = String(fieldVal) !== String(targetVal);
+          else if (op === '>') passed = Number(fieldVal) > Number(targetVal);
+          else if (op === '<') passed = Number(fieldVal) < Number(targetVal);
+          else if (op === 'contains') passed = String(fieldVal).includes(String(targetVal));
+
+          if (passed) {
+            stepLog.status = 'success';
+            stepLog.message = `Condition met: "${fieldVal}" ${op} "${targetVal}"`;
+          } else {
+            stepLog.status = 'failed';
+            stepLog.message = `Condition failed: "${fieldVal}" ${op} "${targetVal}"`;
+            hasFailed = true;
+          }
+        } else if (node.type === 'output') {
+          const stringVars: Record<string, string> = {};
+          for (const [k, v] of Object.entries(runtimeVars)) {
+            stringVars[k] = typeof v === 'object' ? JSON.stringify(v) : String(v ?? '');
+          }
+          const msg = interpolateVariables(node.config.logMessage || 'Flow step reached', stringVars);
+          stepLog.status = 'success';
+          stepLog.message = msg;
+          stepLog.data = { output: msg };
+        }
+      } catch (err: any) {
+        stepLog.status = 'failed';
+        stepLog.message = err.message || 'Execution error';
+        hasFailed = true;
+      }
+
+      stepLog.durationMs = stepLog.durationMs || Math.round(performance.now() - tStart);
+      logs.push(stepLog);
+
+      set((state) => ({
+        flowReport: state.flowReport
+          ? {
+              ...state.flowReport,
+              currentStepIndex: i,
+              logs: [...logs],
+              variables: { ...runtimeVars },
+            }
+          : null,
+      }));
+    }
+
+    const finalDuration = logs.reduce((acc, l) => acc + (l.durationMs || 0), 0);
+    set((state) => ({
+      isFlowRunning: false,
+      flowReport: state.flowReport
+        ? {
+            ...state.flowReport,
+            status: hasFailed ? 'failed' : 'success',
+            endTime: new Date().toISOString(),
+            durationMs: finalDuration,
+            logs: [...logs],
+            variables: { ...runtimeVars },
+          }
+        : null,
+    }));
   },
 }));
 

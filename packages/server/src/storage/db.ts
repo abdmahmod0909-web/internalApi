@@ -8,6 +8,7 @@ import type {
   ApiRequestData,
   Environment,
   EnvironmentVariable,
+  Flow,
 } from '@internalapi/shared';
 import { encryptSecret, decryptSecret } from '../crypto/encryption.js';
 
@@ -15,6 +16,7 @@ export interface StorageData {
   workspaces: Workspace[];
   collections: Collection[];
   environments: Environment[];
+  flows?: Flow[];
   history: Array<{
     id: string;
     workspaceId: string;
@@ -187,6 +189,9 @@ class LocalFileStorage {
         if (!Array.isArray(parsed.collections)) {
           parsed.collections = [...INITIAL_DEMO_DATA.collections];
         }
+        if (!Array.isArray(parsed.flows)) {
+          parsed.flows = [];
+        }
         return parsed;
       }
     } catch (e) {
@@ -222,6 +227,50 @@ class LocalFileStorage {
     this.data.workspaces.push(ws);
     this.saveData(this.data);
     return ws;
+  }
+
+  deleteWorkspace(id: string): boolean {
+    const prevLen = this.data.workspaces.length;
+    this.data.workspaces = this.data.workspaces.filter((w) => w.id !== id && !w.isDefault);
+    this.saveData(this.data);
+    return this.data.workspaces.length < prevLen;
+  }
+
+  // Flows
+  getFlows(workspaceId: string): Flow[] {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    return this.data.flows.filter((f) => f.workspaceId === workspaceId);
+  }
+
+  getFlow(id: string): Flow | undefined {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    return this.data.flows.find((f) => f.id === id);
+  }
+
+  saveFlow(flow: Flow): Flow {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    const index = this.data.flows.findIndex((f) => f.id === flow.id);
+    const toSave: Flow = {
+      ...flow,
+      id: flow.id || `flow-${crypto.randomUUID()}`,
+      updatedAt: new Date().toISOString(),
+      createdAt: flow.createdAt || new Date().toISOString(),
+    };
+    if (index >= 0) {
+      this.data.flows[index] = toSave;
+    } else {
+      this.data.flows.push(toSave);
+    }
+    this.saveData(this.data);
+    return toSave;
+  }
+
+  deleteFlow(id: string): boolean {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    const prevLen = this.data.flows.length;
+    this.data.flows = this.data.flows.filter((f) => f.id !== id);
+    this.saveData(this.data);
+    return this.data.flows.length < prevLen;
   }
 
   // Collections

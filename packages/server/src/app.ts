@@ -90,6 +90,33 @@ export function buildApp(): FastifyInstance {
     return db.createWorkspace(body.name, body.description);
   });
 
+  app.delete('/api/workspaces/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    const success = db.deleteWorkspace(id);
+    return { success };
+  });
+
+  // Flows (Workflows / API Flow Tool)
+  app.get('/api/flows', async (req) => {
+    const query = req.query as { workspaceId?: string };
+    const wsId = query.workspaceId || 'ws-default-company';
+    return db.getFlows(wsId);
+  });
+
+  app.post('/api/flows', async (req) => {
+    const body = req.body as any;
+    if (!body?.name) {
+      throw app.httpErrors.badRequest('Flow name is required');
+    }
+    return db.saveFlow(body);
+  });
+
+  app.delete('/api/flows/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    const success = db.deleteFlow(id);
+    return { success };
+  });
+
   // Environments
   app.get('/api/environments', async (req) => {
     const query = req.query as { workspaceId?: string };

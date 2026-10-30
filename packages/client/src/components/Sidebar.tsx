@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore.js';
 import {
   Folder,
@@ -17,6 +17,8 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Workflow,
+  Sparkles,
 } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
 
@@ -39,7 +41,7 @@ function getMethodColor(method: HttpMethod | string): string {
 
 export const Sidebar: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState<'collections' | 'history'>('collections');
+  const [activeTab, setActiveTab] = useState<'collections' | 'flows' | 'history'>('collections');
   const [filterText, setFilterText] = useState('');
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
@@ -76,7 +78,20 @@ export const Sidebar: React.FC = () => {
     deleteRequestFromCollection,
     renameRequestInCollection,
     clearHistory,
+    flows,
+    activeFlowId,
+    setActiveFlowId,
+    createFlow,
+    deleteFlow,
+    activeView,
+    setActiveView,
   } = useAppStore();
+
+  useEffect(() => {
+    if (activeView === 'flows') {
+      setActiveTab('flows');
+    }
+  }, [activeView]);
 
   const toggleFolder = (id: string) => {
     setCollapsedFolders((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -143,6 +158,11 @@ export const Sidebar: React.FC = () => {
     item.method.toLowerCase().includes(filterText.toLowerCase())
   );
 
+  const filteredFlows = flows.filter((flow) =>
+    flow.name.toLowerCase().includes(filterText.toLowerCase()) ||
+    (flow.description && flow.description.toLowerCase().includes(filterText.toLowerCase()))
+  );
+
   // Minimized / Collapsed View (Slim Icon Rail)
   if (isCollapsed) {
     return (
@@ -163,6 +183,7 @@ export const Sidebar: React.FC = () => {
           <button
             onClick={() => {
               setActiveTab('collections');
+              setActiveView('requests');
               setIsCollapsed(false);
             }}
             className={`p-2 rounded transition-colors relative ${
@@ -174,6 +195,26 @@ export const Sidebar: React.FC = () => {
           >
             <Layers className="w-4 h-4" />
             {collections.length > 0 && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
+            )}
+          </button>
+
+          {/* Flows Icon Button */}
+          <button
+            onClick={() => {
+              setActiveTab('flows');
+              setActiveView('flows');
+              setIsCollapsed(false);
+            }}
+            className={`p-2 rounded transition-colors relative ${
+              activeTab === 'flows'
+                ? 'text-orange-500 bg-gray-900'
+                : 'text-gray-400 hover:text-white hover:bg-gray-900/60'
+            }`}
+            title="Flows"
+          >
+            <Workflow className="w-4 h-4" />
+            {flows.length > 0 && (
               <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-500 rounded-full"></span>
             )}
           </button>
@@ -213,11 +254,14 @@ export const Sidebar: React.FC = () => {
   // Expanded Sidebar View
   return (
     <aside className="w-80 bg-gray-950 border-r border-gray-800 flex flex-col h-full select-none shrink-0">
-      {/* Switcher: Collections vs History + Collapse Button */}
+      {/* Switcher: Collections vs Flows vs History + Collapse Button */}
       <div className="flex border-b border-gray-800 text-xs font-semibold text-gray-400 items-center justify-between">
         <div className="flex flex-1">
           <button
-            onClick={() => setActiveTab('collections')}
+            onClick={() => {
+              setActiveTab('collections');
+              setActiveView('requests');
+            }}
             className={`flex-1 py-2.5 flex items-center justify-center space-x-1.5 transition-colors ${
               activeTab === 'collections'
                 ? 'text-orange-500 border-b-2 border-orange-500 bg-gray-900/50'
@@ -226,6 +270,20 @@ export const Sidebar: React.FC = () => {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Collections</span>
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('flows');
+              setActiveView('flows');
+            }}
+            className={`flex-1 py-2.5 flex items-center justify-center space-x-1.5 transition-colors ${
+              activeTab === 'flows'
+                ? 'text-orange-500 border-b-2 border-orange-500 bg-gray-900/50'
+                : 'hover:text-gray-200'
+            }`}
+          >
+            <Workflow className="w-3.5 h-3.5" />
+            <span>Flows</span>
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -785,6 +843,75 @@ export const Sidebar: React.FC = () => {
                   )}
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'flows' && (
+          <div>
+            <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
+              <span>Workflows ({flows.length})</span>
+              <button
+                onClick={() => createFlow('New API Flow', '', 'blank')}
+                className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
+                title="Create New Flow"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New</span>
+              </button>
+            </div>
+
+            {filteredFlows.length === 0 ? (
+              <div className="text-center py-8 px-4 text-xs text-gray-500 space-y-3">
+                <p>No API flows created yet in this workspace.</p>
+                <button
+                  onClick={() => createFlow('My First Flow', '', 'blank')}
+                  className="px-3 py-1.5 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded text-xs transition-colors"
+                >
+                  + Create Your First Flow
+                </button>
+              </div>
+            ) : (
+              filteredFlows.map((flow) => {
+                const isSelected = activeFlowId === flow.id && activeView === 'flows';
+                return (
+                  <div
+                    key={flow.id}
+                    onClick={() => {
+                      setActiveFlowId(flow.id);
+                      setActiveView('flows');
+                    }}
+                    className={`group flex items-center justify-between px-2.5 py-2 rounded text-xs cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-orange-500/10 text-orange-400 font-medium'
+                        : 'text-gray-300 hover:bg-gray-900'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 truncate">
+                      <Workflow className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-orange-400' : 'text-gray-500'}`} />
+                      <div className="truncate">
+                        <div className="truncate">{flow.name}</div>
+                        <div className="text-[10px] text-gray-500 font-mono">
+                          {flow.nodes.length} {flow.nodes.length === 1 ? 'step' : 'steps'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete flow "${flow.name}"?`)) {
+                          deleteFlow(flow.id);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-gray-500 rounded transition-opacity"
+                      title="Delete Flow"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              })
             )}
           </div>
         )}
