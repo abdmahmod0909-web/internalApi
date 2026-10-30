@@ -1,5 +1,12 @@
 {
-  "workspaces": [],
+  "workspaces": [
+    {
+      "id": "ws-default-company",
+      "name": "Company Internal APIs",
+      "description": "Default company workspace for internal and microservice testing",
+      "isDefault": true
+    }
+  ],
   "environments": [],
   "collections": [
     {
@@ -5866,32 +5873,12 @@
     {
       "workspaceId": "ws-default-company",
       "method": "GET",
-      "url": "https://httpbin.org/get",
-      "status": 0,
-      "size": 0,
-      "time": 0,
-      "id": "hist-6a2d21bc-43c1-4e90-8bd7-be5c5d0b42e9",
-      "createdAt": "2026-10-30T11:19:02.209Z"
-    },
-    {
-      "workspaceId": "ws-default-company",
-      "method": "GET",
-      "url": "https://httpbin.org/get",
-      "status": 0,
-      "size": 0,
-      "time": 0,
-      "id": "hist-5640305c-03a4-452a-847f-2f52bb2b2021",
-      "createdAt": "2026-10-30T11:18:14.090Z"
-    },
-    {
-      "workspaceId": "ws-default-company",
-      "method": "GET",
-      "url": "https://httpbin.org/get",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
       "status": 200,
-      "size": 261,
-      "time": 545,
-      "id": "hist-4796b4e9-4343-4d8d-889a-c45a863dfe7f",
-      "createdAt": "2026-10-30T11:08:06.093Z"
+      "size": 3096,
+      "time": 776,
+      "id": "hist-61f1f0ec-0458-4dc0-9367-5beccecf0e73",
+      "createdAt": "2026-10-30T11:33:36.552Z"
     },
     {
       "workspaceId": "ws-default-company",
@@ -6253,6 +6240,5 @@
       "id": "hist-e25b3c8f-88e5-4915-9c03-c23c22a8d6be",
       "createdAt": "2026-10-29T20:09:35.482Z"
     }
-  ],
-  "flows": []
+  ]
 }
