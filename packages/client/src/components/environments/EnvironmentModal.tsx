@@ -439,7 +439,7 @@ export const EnvironmentModal: React.FC = () => {
                         </label>
                         <input
                           type="text"
-                          placeholder="e.g. 192.168.1.100 or localhost"
+                          placeholder="e.g. 192.168.1.100 or 127.0.0.1"
                           value={currentDbConfig.host || ''}
                           onChange={(e) => updateDbConfig({ host: e.target.value })}
                           className="w-full bg-gray-950 border border-gray-700 rounded px-3 py-1.5 text-xs text-white placeholder-gray-600 outline-none focus:border-cyan-500 font-mono"

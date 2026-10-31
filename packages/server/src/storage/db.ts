@@ -42,17 +42,29 @@ function getDataFilePath(): { dataDir: string; dataFile: string } {
   if (fs.existsSync(path.join(cwdPath, 'store.json'))) {
     return { dataDir: cwdPath, dataFile: path.join(cwdPath, 'store.json') };
   }
+  // Check __dirname .data/store.json (for packaged desktop app)
+  const dirPath = path.resolve(__dirname, '.data');
+  if (fs.existsSync(path.join(dirPath, 'store.json'))) {
+    return { dataDir: dirPath, dataFile: path.join(dirPath, 'store.json') };
+  }
   // Check parent ../.data/store.json
   const parentPath = path.resolve(process.cwd(), '../.data');
   if (fs.existsSync(path.join(parentPath, 'store.json'))) {
     return { dataDir: parentPath, dataFile: path.join(parentPath, 'store.json') };
   }
 
-  // Default to packages/server/.data
-  const rootDir = fs.existsSync(path.resolve(process.cwd(), 'packages/server'))
-    ? path.resolve(process.cwd(), 'packages/server')
-    : process.cwd();
-  const dir = path.join(rootDir, '.data');
+  // Default to packages/server/.data or APPDATA on Windows for packaged app
+  if (fs.existsSync(path.resolve(process.cwd(), 'packages/server'))) {
+    const dir = path.join(process.cwd(), 'packages/server/.data');
+    return { dataDir: dir, dataFile: path.join(dir, 'store.json') };
+  }
+
+  if (process.env.APPDATA) {
+    const appDataDir = path.join(process.env.APPDATA, 'InternalAPI', '.data');
+    return { dataDir: appDataDir, dataFile: path.join(appDataDir, 'store.json') };
+  }
+
+  const dir = path.join(process.cwd(), '.data');
   return { dataDir: dir, dataFile: path.join(dir, 'store.json') };
 }
 

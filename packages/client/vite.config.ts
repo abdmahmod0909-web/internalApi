@@ -29,11 +29,11 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3001', // Use 127.0.0.1 to prevent Windows IPv6 DNS lag
+        target: 'http://127.0.0.1:39281', // Dedicated port to prevent conflicts and Windows IPv6 DNS lag
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://127.0.0.1:3001',
+        target: 'http://127.0.0.1:39281',
         changeOrigin: true,
       },
     },

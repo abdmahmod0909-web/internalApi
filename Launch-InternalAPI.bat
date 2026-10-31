@@ -2,8 +2,8 @@
 setlocal
 cd /d "%~dp0"
 
-:: 1. Check if backend is already listening on 3001 or 3000
-netstat -aon | findstr ":3001.*LISTENING" >nul 2>&1
+:: 1. Check if backend is already listening on 39281 or 3000
+netstat -aon | findstr ":39281.*LISTENING" >nul 2>&1
 if %errorlevel% neq 0 (
     netstat -aon | findstr ":3000.*LISTENING" >nul 2>&1
     if %errorlevel% neq 0 (
@@ -16,7 +16,7 @@ if %errorlevel% neq 0 (
 if exist "%~dp0InternalAPI-win32-x64\InternalAPI.exe" (
     start "" "%~dp0InternalAPI-win32-x64\InternalAPI.exe"
 ) else (
-    echo Desktop binary not in default folder. Starting browser at http://localhost:3001 ...
-    start http://localhost:3001/
+    echo Desktop binary not in default folder. Starting browser at http://127.0.0.1:39281 ...
+    start http://127.0.0.1:39281/
 )
 exit

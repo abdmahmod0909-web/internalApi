@@ -16,7 +16,7 @@ describe('db-sync configuration and validation', () => {
     expect(
       isDbConfigured({
         type: 'postgres',
-        host: 'localhost',
+        host: '127.0.0.1',
         database: '',
         username: 'postgres',
       })

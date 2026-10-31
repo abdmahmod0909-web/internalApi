@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm run dev --workspace=@internalapi/server\" \"npm run dev --workspace=@internalapi/client\"",
     "build": "npm run build --workspaces",
-    "build:desktop": "npm run build && npx nativefier \"http://localhost:3001/\" --name \"InternalAPI\" --background-color \"#030712\" --width 1280 --height 800 --overwrite && node scripts/patch-main.js",
+    "build:desktop": "npm run build && npx nativefier \"http://127.0.0.1:39281/\" --name \"InternalAPI\" --background-color \"#030712\" --width 1280 --height 800 --overwrite && node scripts/patch-main.js",
     "test": "npm run test --workspaces",
     "lint": "npm run lint --workspaces"
   },

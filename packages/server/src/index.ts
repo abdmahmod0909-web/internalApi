@@ -1,32 +1,50 @@
 import { buildApp } from './app.js';
 import dotenv from 'dotenv';
+import type { FastifyInstance } from 'fastify';
 
 dotenv.config();
 
-const PORT = parseInt(process.env.PORT || '3001', 10);
-const HOST = process.env.HOST || '0.0.0.0';
+export const DEFAULT_PORT = 39281;
+export const DEFAULT_HOST = '127.0.0.1';
 
-async function start() {
+let serverInstance: FastifyInstance | null = null;
+
+export async function startServer(
+  port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10),
+  host = process.env.HOST || DEFAULT_HOST
+): Promise<FastifyInstance> {
+  if (serverInstance) {
+    return serverInstance;
+  }
+
   const app = buildApp();
 
   try {
-    await app.listen({ port: PORT, host: HOST });
-    console.log(`🚀 InternalAPI Server listening on http://${HOST}:${PORT}`);
-    console.log(`📊 Health check available at http://${HOST}:${PORT}/health`);
+    await app.listen({ port, host });
+    console.log(`🚀 InternalAPI Server listening on http://${host}:${port}`);
+    console.log(`📊 Health check available at http://${host}:${port}/health`);
+    serverInstance = app;
+    return app;
   } catch (err: any) {
-    // If binding to 0.0.0.0 fails on Windows, fallback to 127.0.0.1
-    if (HOST !== '127.0.0.1') {
+    if (host !== '127.0.0.1') {
       try {
-        await app.listen({ port: PORT, host: '127.0.0.1' });
-        console.log(`🚀 InternalAPI Server listening on http://127.0.0.1:${PORT}`);
-        return;
+        await app.listen({ port, host: '127.0.0.1' });
+        console.log(`🚀 InternalAPI Server listening on http://127.0.0.1:${port}`);
+        serverInstance = app;
+        return app;
       } catch (innerErr) {
         app.log.error(innerErr);
       }
     }
     app.log.error(err);
-    process.exit(1);
+    throw err;
   }
 }
 
-start();
+// Auto-start when executed as standalone script (CLI or node index.js)
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch(() => {
+    // If already running (e.g. spawned previously), log gracefully
+    console.log('InternalAPI server already listening or starting.');
+  });
+}

@@ -42,6 +42,12 @@ export function buildApp(): FastifyInstance {
 
   // Serve static client build if present
   const possibleDistPaths = [
+    path.resolve(__dirname, 'client_dist'),
+    path.resolve(__dirname, '../client_dist'),
+    path.resolve(process.cwd(), 'client_dist'),
+    path.resolve(process.cwd(), 'resources/app/client_dist'),
+    path.resolve(__dirname, 'dist'),
+    path.resolve(__dirname, '../dist'),
     path.resolve(process.cwd(), 'packages/client/dist'),
     path.resolve(process.cwd(), '../client/dist'),
     path.resolve(process.cwd(), 'client/dist'),
