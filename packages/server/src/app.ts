@@ -19,9 +19,14 @@ import {
 import { executeProxyRequest } from './proxy/http-client.js';
 import { fetchOAuth2ClientCredentials } from './proxy/oauth2.js';
 
-export function buildApp(): FastifyInstance {
+export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
+  const isDesktop = process.env.DESKTOP_STANDALONE === 'true' || typeof (process as any).versions?.electron !== 'undefined';
+  const enableLogger = opts?.logger !== undefined
+    ? opts.logger
+    : (process.env.NODE_ENV === 'test' || isDesktop ? false : true);
+
   const app = Fastify({
-    logger: process.env.NODE_ENV === 'test' ? false : true,
+    logger: enableLogger,
     bodyLimit: 50 * 1024 * 1024, // 50MB for large payloads
   });
 

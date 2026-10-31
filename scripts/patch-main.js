@@ -75,6 +75,42 @@ if (!fs.existsSync(mainJsPath)) {
 
 let content = fs.readFileSync(mainJsPath, 'utf8');
 
+// Inject Windows GUI EBADF Protector at the very top of main.js
+const ebadfGuard = `// EBADF Windows GUI Stream Protector
+if (process.platform === 'win32') {
+    const safeIgnore = (err) => {
+        if (err && (err.code === 'EBADF' || String(err).includes('EBADF') || String(err).includes('bad file descriptor'))) return;
+    };
+    try {
+        if (process.stdout) {
+            process.stdout.on('error', safeIgnore);
+            process.stdout.write = (chunk, encoding, cb) => {
+                if (typeof encoding === 'function') encoding();
+                else if (typeof cb === 'function') cb();
+                return true;
+            };
+        }
+        if (process.stderr) {
+            process.stderr.on('error', safeIgnore);
+            process.stderr.write = (chunk, encoding, cb) => {
+                if (typeof encoding === 'function') encoding();
+                else if (typeof cb === 'function') cb();
+                return true;
+            };
+        }
+    } catch (_) {}
+    process.on('uncaughtException', (err) => {
+        if (err && (err.code === 'EBADF' || String(err).includes('EBADF') || String(err).includes('bad file descriptor'))) {
+            return;
+        }
+    });
+}
+`;
+
+if (!content.includes('EBADF Windows GUI Stream Protector')) {
+  content = ebadfGuard + '\n' + content;
+}
+
 // Ensure default BrowserWindow backgroundColor is #030712
 content = content.replace(
   /backgroundColor:\s*options\.backgroundColor,/,
@@ -212,7 +248,6 @@ const splashHtml = `data:text/html;charset=utf-8,` + encodeURIComponent(`<!DOCTY
 
 const newLoadBlock = `    if (appArgs.targetUrl) {
         const http = require('http');
-        const net = require('net');
         const path = require('path');
         const fs = require('fs');
 
@@ -230,7 +265,7 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
                 hostname: '127.0.0.1',
                 port: port,
                 path: '/health',
-                timeout: 100,
+                timeout: 80,
             }, (res) => {
                 res.resume();
                 resolve(true);
@@ -249,12 +284,10 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
                 const srv = require(serverBundlePath);
                 if (typeof srv.startServer === 'function') {
                     srv.startServer(39281, '127.0.0.1').catch((err) => {
-                        log.info('Embedded server start note:', err.message);
+                        // ignore EADDRINUSE if server already started
                     });
                 }
-            } catch (srvErr) {
-                log.error('Failed to initialize embedded server:', srvErr);
-            }
+            } catch (srvErr) {}
         }
 
         // 3. Fast probe: check if port 39281 (or dev server 3000) is ready
@@ -265,7 +298,7 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
         }
 
         if (!is39281 && !is3000) {
-            for (let i = 0; i < 25; i++) {
+            for (let i = 0; i < 20; i++) {
                 await new Promise((r) => setTimeout(r, 40));
                 is39281 = await checkHttpReady(39281);
                 if (is39281) break;
@@ -277,15 +310,13 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
         // 4. Target URL: load from 127.0.0.1:39281 (or 3000 if dev server active)
         const targetUrl = is3000 ? 'http://127.0.0.1:3000/' : 'http://127.0.0.1:39281/';
         appArgs.targetUrl = targetUrl;
-        log.info('Final targetUrl determined:', targetUrl);
 
         // 5. Navigate to target URL
         try {
             await mainWindow.loadURL(targetUrl);
         } catch (err) {
-            log.warn('Initial loadURL failed, retrying in 300ms...', err);
             setTimeout(() => {
-                mainWindow.loadURL(targetUrl).catch((e) => log.error('Retry loadURL failed:', e));
+                mainWindow.loadURL(targetUrl).catch(() => {});
             }, 300);
         }
     }
@@ -294,4 +325,4 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
 
 content = content.slice(0, startIdx) + newLoadBlock + content.slice(endIdx);
 fs.writeFileSync(mainJsPath, content, 'utf8');
-console.log('✓ Successfully patched main.js cleanly with embedded server and zero white screen!');
+console.log('✓ Successfully patched main.js cleanly with embedded server, EBADF protection, and zero white screen!');

@@ -9,6 +9,14 @@ export const DEFAULT_HOST = '127.0.0.1';
 
 let serverInstance: FastifyInstance | null = null;
 
+function safeLog(...args: any[]) {
+  try {
+    if (typeof process !== 'undefined' && process.stdout && !process.stdout.destroyed) {
+      console.log(...args);
+    }
+  } catch (_) {}
+}
+
 export async function startServer(
   port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10),
   host = process.env.HOST || DEFAULT_HOST
@@ -17,19 +25,20 @@ export async function startServer(
     return serverInstance;
   }
 
-  const app = buildApp();
+  const isElectron = typeof (process as any).versions?.electron !== 'undefined';
+  const app = buildApp({ logger: !isElectron && process.env.NODE_ENV !== 'test' });
 
   try {
     await app.listen({ port, host });
-    console.log(`🚀 InternalAPI Server listening on http://${host}:${port}`);
-    console.log(`📊 Health check available at http://${host}:${port}/health`);
+    safeLog(`🚀 InternalAPI Server listening on http://${host}:${port}`);
+    safeLog(`📊 Health check available at http://${host}:${port}/health`);
     serverInstance = app;
     return app;
   } catch (err: any) {
     if (host !== '127.0.0.1') {
       try {
         await app.listen({ port, host: '127.0.0.1' });
-        console.log(`🚀 InternalAPI Server listening on http://127.0.0.1:${port}`);
+        safeLog(`🚀 InternalAPI Server listening on http://127.0.0.1:${port}`);
         serverInstance = app;
         return app;
       } catch (innerErr) {
