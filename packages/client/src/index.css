@@ -417,3 +417,12 @@ html.theme-light ::-webkit-scrollbar-track {
     background: #4b5563;
   }
 }
+
+/* Utility to hide scrollbars for clean tab containers */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}

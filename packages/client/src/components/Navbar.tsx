@@ -222,21 +222,21 @@ export const Navbar: React.FC = () => {
       {/* Global Command Search */}
       <button
         onClick={() => setCommandPaletteOpen(true)}
-        className="flex items-center space-x-2 px-3 py-1 text-xs text-gray-400 bg-gray-900 border border-gray-800 rounded-md hover:bg-gray-850 hover:text-gray-200 transition-colors w-72 justify-between"
+        className="flex items-center space-x-2 px-3 py-1 text-xs text-gray-400 bg-gray-900 border border-gray-800 rounded-md hover:bg-gray-850 hover:text-gray-200 transition-colors w-48 sm:w-60 lg:w-72 justify-between"
       >
-        <span className="flex items-center space-x-1.5">
-          <Search className="w-3.5 h-3.5" />
-          <span>Search or jump to...</span>
+        <span className="flex items-center space-x-1.5 truncate">
+          <Search className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">Search or jump to...</span>
         </span>
-        <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-800 text-gray-400 rounded border border-gray-700">
+        <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-800 text-gray-400 rounded border border-gray-700 shrink-0 hidden sm:inline-block">
           Ctrl + K
         </kbd>
       </button>
 
       {/* Right Controls: Quick Actions, Environments, Settings */}
       <div className="flex items-center space-x-2">
-        {/* OTA Hot Update Notification or Version Badge */}
-        {otaInfo?.hasUpdate ? (
+        {/* OTA Hot Update Notification (ONLY visible when an update is available!) */}
+        {otaInfo?.hasUpdate && (
           <button
             onClick={() => setOtaModalOpen(true)}
             className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white rounded shadow-sm transition-all animate-pulse"
@@ -245,59 +245,14 @@ export const Navbar: React.FC = () => {
             <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
             <span>Update v{otaInfo.latestVersion}</span>
           </button>
-        ) : (
-          <button
-            onClick={() => setOtaModalOpen(true)}
-            className="flex items-center space-x-1 px-2 py-1 text-[11px] text-gray-400 hover:text-gray-200 bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
-            title="Check for Over-The-Air updates or view version info"
-          >
-            <Sparkles className="w-3 h-3 text-orange-400" />
-            <span className="hidden xl:inline">{otaInfo?.currentVersion ? `v${otaInfo.currentVersion}` : 'Updates'}</span>
-          </button>
         )}
-
-        {/* Open in Web Browser Button */}
-        <a
-          href="http://127.0.0.1:39281/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
-          title="Open InternalAPI in your web browser (Chrome, Safari, Edge, Firefox)"
-        >
-          <Globe className="w-3.5 h-3.5 text-orange-400" />
-          <span className="hidden lg:inline">Browser</span>
-        </a>
-
-        {/* Import Collection / cURL Button */}
-        <button
-          onClick={() => setImportModalOpen(true)}
-          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
-          title="Import Postman Collection v2.1 or cURL"
-        >
-          <Upload className="w-3.5 h-3.5 text-orange-500" />
-          <span>Import</span>
-        </button>
-
-        {/* Theme Selector */}
-        <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-1.5 py-0.5" title="Switch Theme">
-          <Palette className="w-3.5 h-3.5 text-gray-400 mr-1" />
-          <select
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as any)}
-            className="bg-transparent text-xs text-gray-300 py-1 outline-none cursor-pointer"
-          >
-            <option value="dark" className="bg-gray-900 text-gray-200">Dark (Postman)</option>
-            <option value="midnight" className="bg-gray-900 text-gray-200">Midnight Blue</option>
-            <option value="light" className="bg-white text-gray-800">Light (Clean)</option>
-          </select>
-        </div>
 
         {/* Environment Picker */}
         <div className="flex items-center bg-gray-900 border border-gray-800 rounded-md p-0.5">
           <select
             value={activeEnvironmentId || ''}
             onChange={(e) => setActiveEnvironmentId(e.target.value || null)}
-            className="bg-transparent text-xs text-gray-300 px-2 py-1 outline-none cursor-pointer"
+            className="bg-transparent text-xs text-gray-300 px-2 py-1 outline-none cursor-pointer max-w-[130px] truncate"
           >
             <option value="" className="bg-gray-900 text-gray-400">
               No Environment
@@ -309,7 +264,7 @@ export const Navbar: React.FC = () => {
             ))}
           </select>
           <button
-            title="Environment Quick Look / Variables"
+            title="Manage Environments & Variables"
             onClick={() => setEnvModalOpen(true)}
             className="p-1 hover:text-orange-400 text-gray-400 rounded transition-colors"
           >
@@ -317,41 +272,41 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Manage Environments */}
+        {/* Import Collection / cURL Button */}
         <button
-          onClick={() => setEnvModalOpen(true)}
-          className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-850 rounded border border-gray-800"
-          title="Manage Environments"
+          onClick={() => setImportModalOpen(true)}
+          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+          title="Import Postman Collection v2.1 or cURL"
         >
-          <Settings className="w-4 h-4" />
+          <Upload className="w-3.5 h-3.5 text-orange-500" />
+          <span className="hidden sm:inline">Import</span>
         </button>
 
-        {/* Quick Send Action (visible in Request mode) */}
-        {activeView === 'requests' && (
-          <>
-            <button
-              onClick={() => {
-                if (activeTab?.request?.url?.trim()) {
-                  sendRequest();
-                }
-              }}
-              disabled={activeTab?.isLoading || !activeTab?.request?.url?.trim()}
-              className="flex items-center space-x-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors"
-              title={!activeTab?.request?.url?.trim() ? 'Enter a URL to send request' : 'Send Request (Ctrl+Enter)'}
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Send</span>
-            </button>
+        {/* Theme Selector */}
+        <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-1.5 py-0.5" title="Switch Theme">
+          <Palette className="w-3.5 h-3.5 text-gray-400 mr-1" />
+          <select
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as any)}
+            className="bg-transparent text-xs text-gray-300 py-1 outline-none cursor-pointer"
+          >
+            <option value="dark" className="bg-gray-900 text-gray-200">Dark</option>
+            <option value="midnight" className="bg-gray-900 text-gray-200">Midnight</option>
+            <option value="light" className="bg-white text-gray-800">Light</option>
+          </select>
+        </div>
 
-            <button
-              onClick={() => saveCurrentRequest()}
-              className="flex items-center space-x-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-2.5 py-1.5 rounded border border-gray-700 transition-colors"
-              title="Save Request (Ctrl+S)"
-            >
-              <Save className="w-3.5 h-3.5" />
-            </button>
-          </>
-        )}
+        {/* Open in Web Browser Button */}
+        <a
+          href="http://127.0.0.1:39281/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center space-x-1 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+          title="Open InternalAPI in your web browser (Chrome, Safari, Edge, Firefox)"
+        >
+          <Globe className="w-3.5 h-3.5 text-orange-400" />
+          <span className="hidden md:inline">Browser</span>
+        </a>
       </div>
     </header>
   );
