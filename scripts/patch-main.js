@@ -254,8 +254,30 @@ const splashHtml = `data:text/html;charset=utf-8,` + encodeURIComponent(`<!DOCTY
       0%, 100% { opacity: 0.35; transform: scale(0.85); }
       50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 10px #10b981; }
     }
-    .hint {
+    .browser-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       margin-top: 18px;
+      padding: 7px 16px;
+      border-radius: 8px;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid rgba(249, 115, 22, 0.35);
+      color: #f97316;
+      font-size: 11px;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .browser-btn:hover {
+      background: rgba(249, 115, 22, 0.22);
+      border-color: #f97316;
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+    .hint {
+      margin-top: 16px;
       font-size: 11px;
       color: #6b7280;
       font-family: monospace;
@@ -277,6 +299,14 @@ const splashHtml = `data:text/html;charset=utf-8,` + encodeURIComponent(`<!DOCTY
       <div class="pulse-dot"></div>
       <span>Starting local service...</span>
     </div>
+    <a href="http://127.0.0.1:39281/" target="_blank" class="browser-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="2" y1="12" x2="22" y2="12"></line>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+      </svg>
+      <span>Open in Web Browser (http://127.0.0.1:39281)</span>
+    </a>
     <div class="hint">Standalone Secure Environment</div>
   </div>
 </body>
@@ -286,6 +316,14 @@ const newLoadBlock = `    if (appArgs.targetUrl) {
         const http = require('http');
         const path = require('path');
         const fs = require('fs');
+
+        // Handle external link clicks (like "Open in Web Browser") to open system default browser
+        try {
+            mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+                require('electron').shell.openExternal(url);
+                return { action: 'deny' };
+            });
+        } catch (_) {}
 
         // 1. Immediately render dark branded loading screen, and ONLY THEN show window (zero white screen!)
         try {

@@ -52,64 +52,355 @@ html.theme-midnight .border-orange-500 {
   border-color: #38bdf8 !important;
 }
 
+/* ==========================================================================
+   InternalAPI - High-End Light Theme (Clean, Crisp, High Contrast)
+   ========================================================================== */
+
 html.theme-light {
   --bg-main: #f8fafc;
   --bg-panel: #ffffff;
   --bg-subtle: #f1f5f9;
   --bg-input: #ffffff;
-  --border-color: #cbd5e1;
+  --border-color: #e2e8f0;
   --text-main: #0f172a;
   --text-muted: #64748b;
-  --accent-color: #2563eb;
+  --accent-color: #ea580c;
+  color-scheme: light;
 }
 
+/* 1. Canvas & Surface Backgrounds */
+html.theme-light,
+html.theme-light body,
+html.theme-light #root,
 html.theme-light .bg-gray-950 {
   background-color: #f8fafc !important;
   color: #0f172a !important;
 }
+
 html.theme-light .bg-gray-900 {
   background-color: #ffffff !important;
   color: #0f172a !important;
 }
-html.theme-light .bg-gray-850 {
+
+html.theme-light .bg-gray-850,
+html.theme-light .bg-gray-800 {
   background-color: #f1f5f9 !important;
   color: #0f172a !important;
 }
-html.theme-light .border-gray-800 {
+
+html.theme-light .bg-gray-750,
+html.theme-light .bg-gray-700 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Semi-transparent surface backgrounds */
+html.theme-light .bg-gray-950\/50,
+html.theme-light .bg-gray-950\/80,
+html.theme-light .bg-gray-950\/90 {
+  background-color: rgba(248, 250, 252, 0.92) !important;
+}
+
+html.theme-light .bg-gray-900\/40,
+html.theme-light .bg-gray-900\/50,
+html.theme-light .bg-gray-900\/60,
+html.theme-light .bg-gray-900\/70,
+html.theme-light .bg-gray-900\/80 {
+  background-color: rgba(241, 245, 249, 0.8) !important;
+}
+
+html.theme-light .bg-gray-850\/40,
+html.theme-light .bg-gray-800\/40,
+html.theme-light .bg-gray-800\/50,
+html.theme-light .bg-gray-800\/60,
+html.theme-light .bg-gray-800\/80 {
+  background-color: rgba(226, 232, 240, 0.65) !important;
+}
+
+/* 2. Hover States */
+html.theme-light .hover\:bg-gray-950:hover {
+  background-color: #f8fafc !important;
+}
+
+html.theme-light .hover\:bg-gray-900:hover,
+html.theme-light .hover\:bg-gray-900\/40:hover,
+html.theme-light .hover\:bg-gray-900\/60:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.theme-light .hover\:bg-gray-850:hover,
+html.theme-light .hover\:bg-gray-800:hover,
+html.theme-light .hover\:bg-gray-800\/40:hover,
+html.theme-light .hover\:bg-gray-800\/50:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.theme-light .hover\:bg-gray-700:hover {
+  background-color: #cbd5e1 !important;
+}
+
+/* 3. Borders & Dividers */
+html.theme-light .border-gray-900,
+html.theme-light .border-gray-850,
+html.theme-light .border-gray-800,
+html.theme-light .border-gray-800\/80,
+html.theme-light .divide-gray-850,
+html.theme-light .divide-gray-800 {
   border-color: #e2e8f0 !important;
 }
+
+html.theme-light .border-gray-750,
 html.theme-light .border-gray-700 {
   border-color: #cbd5e1 !important;
 }
+
+html.theme-light .border-gray-600 {
+  border-color: #94a3b8 !important;
+}
+
+html.theme-light .hover\:border-gray-700:hover,
+html.theme-light .hover\:border-gray-800:hover {
+  border-color: #94a3b8 !important;
+}
+
+/* 4. Text Contrast & Readability */
+html.theme-light .text-white,
 html.theme-light .text-gray-100,
 html.theme-light .text-gray-200,
 html.theme-light .text-gray-300 {
   color: #0f172a !important;
 }
+
 html.theme-light .text-gray-400 {
   color: #475569 !important;
 }
+
 html.theme-light .text-gray-500 {
   color: #64748b !important;
 }
+
+html.theme-light .text-gray-600 {
+  color: #94a3b8 !important;
+}
+
+html.theme-light .hover\:text-white:hover,
+html.theme-light .hover\:text-gray-100:hover,
+html.theme-light .hover\:text-gray-200:hover {
+  color: #0f172a !important;
+}
+
+html.theme-light .hover\:text-gray-300:hover,
+html.theme-light .hover\:text-gray-400:hover {
+  color: #1e293b !important;
+}
+
+/* 5. Postman Brand Orange Accent */
+html.theme-light .text-orange-500,
+html.theme-light .text-orange-400 {
+  color: #ea580c !important;
+}
+
+html.theme-light .border-orange-500 {
+  border-color: #ea580c !important;
+}
+
+html.theme-light .hover\:text-orange-400:hover,
+html.theme-light .hover\:text-orange-300:hover {
+  color: #c2410c !important;
+}
+
+html.theme-light .bg-orange-500\/10 {
+  background-color: rgba(234, 88, 12, 0.08) !important;
+}
+
+html.theme-light .bg-orange-500\/20 {
+  background-color: rgba(234, 88, 12, 0.16) !important;
+}
+
+/* 6. Solid Buttons (Preserve Crisp White Text) */
+html.theme-light .bg-orange-600,
+html.theme-light .bg-orange-500,
+html.theme-light .bg-brand-500,
+html.theme-light .bg-brand-600 {
+  background-color: #ea580c !important;
+  color: #ffffff !important;
+}
+
+html.theme-light .bg-orange-600:hover,
+html.theme-light .bg-orange-500:hover {
+  background-color: #c2410c !important;
+  color: #ffffff !important;
+}
+
+html.theme-light .bg-orange-600 *,
+html.theme-light .bg-orange-500 *,
+html.theme-light .bg-brand-500 *,
+html.theme-light .bg-brand-600 *,
+html.theme-light .bg-rose-600 *,
+html.theme-light .bg-red-600 *,
+html.theme-light .bg-emerald-600 *,
+html.theme-light .bg-green-600 *,
+html.theme-light .bg-blue-600 *,
+html.theme-light .bg-purple-600 * {
+  color: #ffffff !important;
+}
+
+/* 7. Inputs, Selects, Dropdowns, Checkboxes */
 html.theme-light input,
 html.theme-light select,
 html.theme-light textarea {
   color: #0f172a !important;
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+}
+
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+html.theme-light input:focus,
+html.theme-light select:focus,
+html.theme-light textarea:focus {
+  border-color: #ea580c !important;
+  outline: none;
+}
+
+html.theme-light option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html.theme-light input[type="checkbox"] {
   background-color: #ffffff !important;
   border-color: #cbd5e1 !important;
 }
-html.theme-light .text-orange-500,
-html.theme-light .text-orange-400 {
-  color: #2563eb !important;
-}
-html.theme-light .bg-orange-600 {
-  background-color: #2563eb !important;
-}
-html.theme-light .border-orange-500 {
-  border-color: #2563eb !important;
+
+html.theme-light input[type="checkbox"]:checked {
+  background-color: #ea580c !important;
+  border-color: #ea580c !important;
 }
 
+/* 8. HTTP Method Badges (High Contrast Light Mode) */
+html.theme-light .text-emerald-400 {
+  color: #059669 !important; /* GET */
+}
+html.theme-light .text-amber-400 {
+  color: #d97706 !important; /* POST */
+}
+html.theme-light .text-blue-400 {
+  color: #2563eb !important; /* PUT */
+}
+html.theme-light .text-purple-400 {
+  color: #7c3aed !important; /* PATCH */
+}
+html.theme-light .text-rose-400 {
+  color: #dc2626 !important; /* DELETE */
+}
+
+/* 9. Response Status Badges & Chips */
+html.theme-light .bg-emerald-950 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+html.theme-light .bg-emerald-950 * {
+  color: #047857 !important;
+}
+
+html.theme-light .bg-rose-950 {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #be123c !important;
+}
+html.theme-light .bg-rose-950 * {
+  color: #be123c !important;
+}
+
+html.theme-light .bg-emerald-950\/70 {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+html.theme-light .bg-emerald-950\/70 * {
+  color: #047857 !important;
+}
+
+/* 10. JSON Viewer Syntax Highlighting */
+html.theme-light .text-sky-400 {
+  color: #0284c7 !important; /* Property keys */
+}
+
+html.theme-light .text-emerald-400 {
+  color: #16a34a !important; /* Strings */
+}
+
+html.theme-light .text-amber-400 {
+  color: #d97706 !important; /* Numbers */
+}
+
+html.theme-light .text-purple-400 {
+  color: #7c3aed !important; /* Booleans */
+}
+
+html.theme-light .text-rose-400 {
+  color: #dc2626 !important; /* Null */
+}
+
+html.theme-light .border-gray-800\/80 {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light .hover\:bg-gray-900\/60:hover {
+  background-color: #f1f5f9 !important;
+}
+
+/* 11. Modals & Dialog Windows */
+html.theme-light .bg-black\/60,
+html.theme-light .bg-black\/70,
+html.theme-light .bg-black\/75,
+html.theme-light .bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+html.theme-light .bg-gray-900.border-gray-700,
+html.theme-light .bg-gray-900.border-gray-800 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+}
+
+html.theme-light kbd {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* 12. Active Request Tabs */
+html.theme-light .bg-gray-900.border-orange-500 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-top-color: #ea580c !important;
+  border-left-color: #e2e8f0 !important;
+  border-right-color: #e2e8f0 !important;
+}
+
+/* 13. Light Scrollbars */
+html.theme-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 4px;
+}
+
+html.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+html.theme-light ::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+/* 14. Default Dark Scrollbars */
 @layer base {
   ::-webkit-scrollbar {
     width: 6px;

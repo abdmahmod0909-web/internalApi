@@ -16,6 +16,7 @@ import {
   Check,
   Workflow,
   Radio,
+  Globe,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -231,6 +232,18 @@ export const Navbar: React.FC = () => {
 
       {/* Right Controls: Quick Actions, Environments, Settings */}
       <div className="flex items-center space-x-2">
+        {/* Open in Web Browser Button */}
+        <a
+          href="http://127.0.0.1:39281/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+          title="Open InternalAPI in your web browser (Chrome, Safari, Edge, Firefox)"
+        >
+          <Globe className="w-3.5 h-3.5 text-orange-400" />
+          <span className="hidden lg:inline">Browser</span>
+        </a>
+
         {/* Import Collection / cURL Button */}
         <button
           onClick={() => setImportModalOpen(true)}
