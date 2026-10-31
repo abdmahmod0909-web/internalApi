@@ -85,6 +85,16 @@
       "status": 0,
       "size": 0,
       "time": 0,
+      "id": "hist-1c775426-8429-4061-a534-19271bb2f481",
+      "createdAt": "2026-10-31T09:16:24.091Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
       "id": "hist-f3230520-0cf0-4721-86de-2e41093cc4c7",
       "createdAt": "2026-10-31T08:19:26.139Z"
     },

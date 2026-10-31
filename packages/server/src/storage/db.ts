@@ -60,8 +60,17 @@ function getDataFilePath(): { dataDir: string; dataFile: string } {
   }
 
   if (process.env.APPDATA) {
+    // Windows: %APPDATA%/InternalAPI/.data
     const appDataDir = path.join(process.env.APPDATA, 'InternalAPI', '.data');
     return { dataDir: appDataDir, dataFile: path.join(appDataDir, 'store.json') };
+  } else if (process.platform === 'darwin' && process.env.HOME) {
+    // macOS: ~/Library/Application Support/InternalAPI/.data
+    const macDataDir = path.join(process.env.HOME, 'Library', 'Application Support', 'InternalAPI', '.data');
+    return { dataDir: macDataDir, dataFile: path.join(macDataDir, 'store.json') };
+  } else if (process.env.HOME) {
+    // Linux: ~/.config/InternalAPI/.data
+    const linuxDataDir = path.join(process.env.HOME, '.config', 'InternalAPI', '.data');
+    return { dataDir: linuxDataDir, dataFile: path.join(linuxDataDir, 'store.json') };
   }
 
   const dir = path.join(process.cwd(), '.data');
