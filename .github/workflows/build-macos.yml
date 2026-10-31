@@ -1,0 +1,92 @@
+name: Build macOS Desktop App
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64] # arm64 = Apple Silicon (M1/M2/M3/M4), x64 = Intel
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Test Suite
+        run: npm test
+
+      - name: Build Monorepo Workspaces
+        run: npm run build
+
+      - name: Package macOS App Bundle (${{ matrix.arch }})
+        run: |
+          npx nativefier "http://127.0.0.1:39281/" \
+            --name "InternalAPI" \
+            --platform mac \
+            --arch ${{ matrix.arch }} \
+            --background-color "#030712" \
+            --width 1280 \
+            --height 800 \
+            --overwrite
+
+      - name: Bundle Standalone Server & Patch Main
+        run: node scripts/patch-main.js
+
+      - name: Ensure Executable Permissions
+        run: |
+          chmod -R +x InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app/Contents/MacOS/InternalAPI
+
+      - name: Create DMG Disk Image
+        run: |
+          hdiutil create -volname "InternalAPI" \
+            -srcfolder "InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app" \
+            -ov -format UDZO \
+            "InternalAPI-macOS-${{ matrix.arch }}.dmg"
+
+      - name: Create ZIP Archive (Preserving Mac Permissions)
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app" \
+            "InternalAPI-macOS-${{ matrix.arch }}.zip"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: InternalAPI-macOS-${{ matrix.arch }}
+          path: |
+            InternalAPI-macOS-${{ matrix.arch }}.dmg
+            InternalAPI-macOS-${{ matrix.arch }}.zip
+          retention-days: 30
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            InternalAPI-macOS-${{ matrix.arch }}.dmg
+            InternalAPI-macOS-${{ matrix.arch }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

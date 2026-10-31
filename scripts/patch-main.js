@@ -2,11 +2,47 @@ const fs = require('fs');
 const path = require('path');
 const cp = require('child_process');
 
-const appResourcesPath = path.resolve(__dirname, '../InternalAPI-win32-x64/resources/app');
+function findAppResourcesPath() {
+  const targetIdx = process.argv.indexOf('--target');
+  if (targetIdx !== -1 && process.argv[targetIdx + 1]) {
+    const custom = path.resolve(process.cwd(), process.argv[targetIdx + 1]);
+    if (fs.existsSync(custom)) return custom;
+  }
+
+  const root = path.resolve(__dirname, '..');
+  const candidates = [
+    path.join(root, 'InternalAPI-darwin-arm64/InternalAPI.app/Contents/Resources/app'),
+    path.join(root, 'InternalAPI-darwin-x64/InternalAPI.app/Contents/Resources/app'),
+    path.join(root, 'InternalAPI-darwin-universal/InternalAPI.app/Contents/Resources/app'),
+    path.join(root, 'InternalAPI-win32-x64/resources/app'),
+    path.join(root, 'InternalAPI-linux-x64/resources/app'),
+  ];
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return c;
+    }
+  }
+
+  try {
+    const entries = fs.readdirSync(root);
+    for (const d of entries) {
+      const macPath = path.join(root, d, 'InternalAPI.app/Contents/Resources/app');
+      if (fs.existsSync(macPath)) return macPath;
+      const winPath = path.join(root, d, 'resources/app');
+      if (fs.existsSync(winPath)) return winPath;
+    }
+  } catch (_) {}
+
+  return path.join(root, 'InternalAPI-win32-x64/resources/app');
+}
+
+const appResourcesPath = findAppResourcesPath();
 const mainJsPath = path.join(appResourcesPath, 'lib/main.js');
 const nativefierJsonPath = path.join(appResourcesPath, 'nativefier.json');
 
 console.log('=== InternalAPI Desktop Packager & Patcher ===');
+console.log('Target app directory:', appResourcesPath);
 
 if (!fs.existsSync(appResourcesPath)) {
   console.error('Desktop app directory not found at: ' + appResourcesPath);
