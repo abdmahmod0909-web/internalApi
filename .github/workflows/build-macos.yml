@@ -25,23 +25,23 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Dependencies
-        run: npm ci
-
       - name: Prepare Environment File
         run: cp .env.example .env
 
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Monorepo Workspaces (Shared, Client, Server)
+        run: npm run build
+
       - name: Run Test Suite
         run: npm test
-
-      - name: Build Monorepo Workspaces
-        run: npm run build
 
       - name: Package macOS App Bundle (${{ matrix.arch }})
         run: |
@@ -57,22 +57,31 @@ jobs:
       - name: Bundle Standalone Server & Patch Main
         run: node scripts/patch-main.js
 
-      - name: Ensure Executable Permissions
+      - name: Create DMG & ZIP Installers
         run: |
-          chmod -R +x InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app/Contents/MacOS/InternalAPI
+          APP_PATH=$(find . -name "InternalAPI.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: InternalAPI.app not found!"
+            exit 1
+          fi
+          echo "Found application bundle at: $APP_PATH"
 
-      - name: Create DMG Disk Image
-        run: |
+          # 1. Ensure Mach-O executable permissions
+          chmod -R +x "$APP_PATH/Contents/MacOS/InternalAPI"
+
+          # 2. Create standard macOS DMG disk image
           hdiutil create -volname "InternalAPI" \
-            -srcfolder "InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app" \
+            -srcfolder "$APP_PATH" \
             -ov -format UDZO \
             "InternalAPI-macOS-${{ matrix.arch }}.dmg"
 
-      - name: Create ZIP Archive (Preserving Mac Permissions)
-        run: |
+          # 3. Create ZIP archive preserving Apple resource forks & executable flags
           ditto -c -k --sequesterRsrc --keepParent \
-            "InternalAPI-darwin-${{ matrix.arch }}/InternalAPI.app" \
+            "$APP_PATH" \
             "InternalAPI-macOS-${{ matrix.arch }}.zip"
+
+          echo "DMG and ZIP packages created successfully:"
+          ls -lh InternalAPI-macOS-${{ matrix.arch }}.*
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -92,4 +101,3 @@ jobs:
             InternalAPI-macOS-${{ matrix.arch }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
