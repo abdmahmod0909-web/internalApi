@@ -1,0 +1,123 @@
+name: Build Linux Desktop App
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build Linux (x64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Prepare Environment File
+        run: cp .env.example .env
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Monorepo Workspaces (Shared, Server, Client)
+        run: npm run build
+
+      - name: Run Test Suite
+        run: npm test
+
+      - name: Package Linux Desktop Application (x64)
+        run: |
+          npx nativefier "http://127.0.0.1:39281/" \
+            --name "InternalAPI" \
+            --platform linux \
+            --arch x64 \
+            --background-color "#030712" \
+            --width 1280 \
+            --height 800 \
+            --overwrite
+
+      - name: Bundle Standalone Server & Patch Main
+        run: node scripts/patch-main.js
+
+      - name: Package Linux Distributables (.tar.gz and .AppImage)
+        run: |
+          if [ ! -d "InternalAPI-linux-x64" ]; then
+            echo "Error: InternalAPI-linux-x64 directory not found!"
+            exit 1
+          fi
+
+          # Ensure main executable permissions
+          chmod +x InternalAPI-linux-x64/InternalAPI
+
+          # 1. Build portable .tar.gz (works on any Linux distro out-of-the-box)
+          tar -czvf InternalAPI-linux-x64.tar.gz InternalAPI-linux-x64
+          echo "Created InternalAPI-linux-x64.tar.gz successfully."
+
+          # 2. Build standalone .AppImage
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp -r InternalAPI-linux-x64/* AppDir/usr/bin/
+
+          # Create AppRun launcher
+          printf '#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/usr/bin/InternalAPI" "$@"\n' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          # Create desktop integration entry
+          printf '[Desktop Entry]\nName=InternalAPI\nExec=InternalAPI\nIcon=internalapi\nType=Application\nCategories=Development;\nTerminal=false\nStartupWMClass=InternalAPI\n' > AppDir/InternalAPI.desktop
+
+          # Create standard application icon
+          ICON_FILE=$(find InternalAPI-linux-x64 -name "*.png" | head -n 1)
+          if [ -n "$ICON_FILE" ]; then
+            cp "$ICON_FILE" AppDir/internalapi.png
+            cp "$ICON_FILE" AppDir/usr/share/icons/hicolor/256x256/apps/internalapi.png
+          else
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==" | base64 -d > AppDir/internalapi.png
+          fi
+
+          # Download and run appimagetool
+          wget -q -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage || true
+          if [ -f appimagetool ]; then
+            chmod +x appimagetool
+            ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir InternalAPI-linux-x86_64.AppImage || true
+          fi
+
+          echo "Linux packages ready:"
+          ls -lh InternalAPI-linux*
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: InternalAPI-linux-x64
+          path: |
+            InternalAPI-linux-x64.tar.gz
+            InternalAPI-linux-x86_64.AppImage
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            InternalAPI-linux-x64.tar.gz
+            InternalAPI-linux-x86_64.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
