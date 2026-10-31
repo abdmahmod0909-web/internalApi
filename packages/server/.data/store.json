@@ -39,45 +39,200 @@
   ],
   "collections": [
     {
-      "id": "col-1793431313821",
+      "id": "col-1793448087321",
       "workspaceId": "ws-default-company",
-      "name": "hhuyhhj'",
+      "name": "dev",
       "sortOrder": 0,
-      "folders": [
+      "folders": [],
+      "requests": [
         {
-          "id": "fld-1793431316961",
-          "collectionId": "col-1793431313821",
-          "name": "jhbbhjk",
-          "sortOrder": 0,
-          "requests": [
+          "name": "exam",
+          "method": "GET",
+          "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+          "queryParams": [
             {
-              "name": "m;lk[]'",
-              "method": "GET",
-              "url": "",
-              "queryParams": [],
-              "headers": [],
-              "pathVars": [],
-              "auth": {
-                "type": "none"
-              },
-              "bodyType": "none",
-              "bodyContent": "",
-              "settings": {
-                "timeoutMs": 30000,
-                "followRedirects": true,
-                "verifySsl": true
-              },
-              "id": "req-1793431320345",
-              "collectionId": "col-1793431313821",
-              "folderId": "fld-1793431316961"
+              "id": "qp-1793448105665-0.9319640947094421",
+              "key": "exam_id",
+              "value": "5762",
+              "isEnabled": true
             }
-          ]
+          ],
+          "headers": [
+            {
+              "id": "h-1793448105665-0.9669714709723172",
+              "key": "accept",
+              "value": "application/json, text/plain, */*",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.1517843502212839",
+              "key": "accept-language",
+              "value": "en-US,en;q=0.9",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.8598016562386399",
+              "key": "api",
+              "value": "1",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.7318249054228338",
+              "key": "authorization",
+              "value": "Bearer 7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.12275653713707779",
+              "key": "cache-control",
+              "value": "no-cache",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.6890667771565706",
+              "key": "lang",
+              "value": "ar",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.09902867224434497",
+              "key": "origin",
+              "value": "https://new-pre-prod.d18axrryrol4bb.amplifyapp.com",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.7756742759040449",
+              "key": "pragma",
+              "value": "no-cache",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.9599331815064018",
+              "key": "priority",
+              "value": "u=1, i",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.8094305973981395",
+              "key": "program",
+              "value": "1",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.19266272143202046",
+              "key": "referer",
+              "value": "https://new-pre-prod.d18axrryrol4bb.amplifyapp.com/",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.15751681766407066",
+              "key": "sec-ch-ua",
+              "value": "\"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"156\", \"Google Chrome\";v=\"156\"",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.18418815273552513",
+              "key": "sec-ch-ua-mobile",
+              "value": "?0",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.2940693256638476",
+              "key": "sec-ch-ua-platform",
+              "value": "\"Windows\"",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.9285183594866435",
+              "key": "sec-fetch-dest",
+              "value": "empty",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.8762526841183718",
+              "key": "sec-fetch-mode",
+              "value": "cors",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.15428759652078128",
+              "key": "sec-fetch-site",
+              "value": "cross-site",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.40500564897124036",
+              "key": "shouldnotredirect401",
+              "value": "true",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.9282126041623557",
+              "key": "shouldnotredirect404",
+              "value": "true",
+              "isEnabled": true
+            },
+            {
+              "id": "h-1793448105665-0.46440565438053305",
+              "key": "user-agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+              "isEnabled": true
+            }
+          ],
+          "pathVars": [],
+          "auth": {
+            "type": "bearer",
+            "bearer": {
+              "token": "7666495|53b5ySjHmsqMd2FmzX00U1RwgsPSvVryGGKgCXAL546dad85"
+            }
+          },
+          "bodyType": "none",
+          "bodyContent": "",
+          "settings": {
+            "timeoutMs": 30000,
+            "followRedirects": true,
+            "verifySsl": true
+          },
+          "id": "req-1793448092770",
+          "collectionId": "col-1793448087321",
+          "folderId": null,
+          "bodyFormData": [],
+          "bodyUrlEncoded": []
         }
-      ],
-      "requests": []
+      ]
     }
   ],
   "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-501bd38b-9f37-4e94-8a63-fde1afe13b02",
+      "createdAt": "2026-10-31T13:31:51.059Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3117,
+      "time": 687,
+      "id": "hist-12a9f6b7-65be-48b0-862a-7a4588ded8c8",
+      "createdAt": "2026-10-31T13:01:28.606Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3100,
+      "time": 807,
+      "id": "hist-837a27a5-3ec0-4bda-9b05-8e498a8a27fb",
+      "createdAt": "2026-10-31T12:01:48.227Z"
+    },
     {
       "workspaceId": "ws-default-company",
       "method": "GET",

@@ -91,8 +91,11 @@ jobs:
             "$APP_PATH" \
             "InternalAPI-macOS-${{ matrix.arch }}.zip"
 
-          echo "DMG and ZIP packages created successfully:"
-          ls -lh InternalAPI-macOS-${{ matrix.arch }}.*
+          # 6. Create OTA UI bundle (~350 KB)
+          tar -czvf ui-bundle.tar.gz -C packages/client/dist .
+
+          echo "Packages created successfully:"
+          ls -lh InternalAPI-macOS-${{ matrix.arch }}.* ui-bundle.tar.gz
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -101,6 +104,7 @@ jobs:
           path: |
             InternalAPI-macOS-${{ matrix.arch }}.dmg
             InternalAPI-macOS-${{ matrix.arch }}.zip
+            ui-bundle.tar.gz
           retention-days: 30
 
       - name: Publish to GitHub Release
@@ -111,5 +115,6 @@ jobs:
           files: |
             InternalAPI-macOS-${{ matrix.arch }}.dmg
             InternalAPI-macOS-${{ matrix.arch }}.zip
+            ui-bundle.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
