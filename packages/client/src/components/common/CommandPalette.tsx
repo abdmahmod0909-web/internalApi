@@ -84,7 +84,11 @@ export const CommandPalette: React.FC = () => {
             </button>
             <button
               onClick={() => {
-                sendRequest();
+                const state = useAppStore.getState();
+                const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
+                if (activeTab?.request?.url?.trim()) {
+                  sendRequest();
+                }
                 setCommandPaletteOpen(false);
               }}
               className="w-full flex items-center px-3 py-2 text-gray-300 hover:bg-gray-800 rounded transition-colors"

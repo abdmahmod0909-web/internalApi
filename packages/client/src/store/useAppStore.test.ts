@@ -30,5 +30,19 @@ describe('Client Zustand Store', () => {
     expect(activeTab?.request.method).toBe('DELETE');
     expect(activeTab?.request.url).toBe('https://httpbin.org/delete');
   });
+
+  it('prevents sendRequest when URL is empty or whitespace', async () => {
+    const store = useAppStore.getState();
+    store.updateActiveRequest((prev) => ({
+      ...prev,
+      url: '   ',
+    }));
+
+    await store.sendRequest();
+
+    const activeTab = useAppStore.getState().tabs.find((t) => t.id === useAppStore.getState().activeTabId);
+    expect(activeTab?.isLoading).toBe(false);
+    expect(activeTab?.response).toBeUndefined();
+  });
 });
 

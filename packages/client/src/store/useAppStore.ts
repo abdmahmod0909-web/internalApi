@@ -388,6 +388,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
 
+    // Do not attempt to send if URL is empty or whitespace
+    if (!tab.request?.url || !tab.request.url.trim()) {
+      return;
+    }
+
     // Set loading
     set({
       tabs: tabs.map((t) => (t.id === tabId ? { ...t, isLoading: true, testResults: undefined } : t)),

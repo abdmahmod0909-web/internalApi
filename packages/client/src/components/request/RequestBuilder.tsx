@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
+import { FormDataEditor } from './FormDataEditor.js';
 import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy } from 'lucide-react';
 import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
@@ -174,24 +175,24 @@ export const RequestBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* URL Execution Bar: Method + URL + Import cURL + Send */}
+      {/* URL Execution Bar: Method + URL + Send (Unified Postman-style bar) */}
       <div className="p-3 border-b border-gray-800 flex items-center space-x-2">
-        <select
-          value={req.method}
-          onChange={(e) =>
-            updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
-          }
-          className="bg-gray-900 border border-gray-700 font-bold text-xs rounded px-2.5 py-2 text-orange-400 outline-none cursor-pointer shrink-0"
-        >
-          {HTTP_METHODS.map((m) => (
-            <option key={m} value={m} className="bg-gray-900 text-gray-200">
-              {m}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-1 min-w-0 rounded-md bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-hidden">
+          <select
+            value={req.method}
+            onChange={(e) =>
+              updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
+            }
+            className="bg-gray-850 hover:bg-gray-800 border-r border-gray-700 font-bold text-xs px-3 py-2 text-orange-400 outline-none cursor-pointer shrink-0"
+          >
+            {HTTP_METHODS.map((m) => (
+              <option key={m} value={m} className="bg-gray-900 text-gray-200">
+                {m}
+              </option>
+            ))}
+          </select>
 
-        {/* URL Input */}
-        <div className="flex-1 min-w-0 relative">
+          {/* URL Input */}
           <input
             type="text"
             placeholder="Enter request URL or paste cURL command here..."
@@ -199,48 +200,48 @@ export const RequestBuilder: React.FC = () => {
             onChange={(e) => handleUrlChange(e.target.value)}
             onPaste={handleUrlPaste}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              if (e.key === 'Enter' && req.url?.trim()) {
                 sendRequest();
               }
             }}
-            className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-xs text-gray-100 placeholder-gray-500 font-mono outline-none focus:border-orange-500 transition-colors"
+            className="flex-1 bg-transparent px-3 py-2 text-xs text-gray-100 placeholder-gray-500 font-mono outline-none min-w-0"
           />
-        </div>
 
-        {/* Quick cURL Paste Action */}
-        <button
-          onClick={async () => {
-            try {
-              const text = await navigator.clipboard.readText();
-              if (isCurlCommand(text)) {
-                applyCurlImport(text);
-              } else {
-                const promptCurl = prompt('Paste your cURL command here:');
-                if (promptCurl && isCurlCommand(promptCurl)) {
-                  applyCurlImport(promptCurl);
-                } else if (promptCurl) {
-                  alert('Input does not start with curl');
+          {/* Clean Integrated cURL Button */}
+          <button
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text && isCurlCommand(text)) {
+                  applyCurlImport(text);
+                  return;
                 }
-              }
-            } catch {
+              } catch {}
               const promptCurl = prompt('Paste your cURL command here:');
               if (promptCurl && isCurlCommand(promptCurl)) {
                 applyCurlImport(promptCurl);
+              } else if (promptCurl) {
+                alert('Input does not start with curl');
               }
-            }
-          }}
-          className="flex items-center space-x-1 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-gray-200 text-xs px-2.5 py-2 rounded border border-gray-800 transition-colors shrink-0"
-          title="Import from cURL"
-        >
-          <Terminal className="w-3.5 h-3.5 text-orange-400" />
-          <span className="hidden sm:inline">Import cURL</span>
-        </button>
+            }}
+            className="flex items-center space-x-1 px-2.5 py-1 text-gray-400 hover:text-orange-400 hover:bg-gray-800 rounded transition-colors shrink-0 my-1 mr-1"
+            title="Import or paste cURL command"
+          >
+            <Terminal className="w-3.5 h-3.5 text-orange-400" />
+            <span className="text-[11px] font-medium hidden sm:inline">cURL</span>
+          </button>
+        </div>
 
         {/* Send Button */}
         <button
-          onClick={() => sendRequest()}
-          disabled={currentTab.isLoading}
-          className="flex items-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded transition-colors shrink-0 shadow-sm"
+          onClick={() => {
+            if (req.url?.trim()) {
+              sendRequest();
+            }
+          }}
+          disabled={currentTab.isLoading || !req.url?.trim()}
+          className="flex items-center justify-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2 rounded-md transition-colors shrink-0 shadow-sm min-w-[76px]"
+          title={!req.url?.trim() ? 'Enter a URL to send request' : 'Send Request'}
         >
           {currentTab.isLoading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -606,13 +607,28 @@ export const RequestBuilder: React.FC = () => {
               </div>
             )}
 
+            {req.bodyType === 'form-data' && (
+              <div className="flex-1 overflow-y-auto">
+                <FormDataEditor
+                  items={req.bodyFormData || []}
+                  onChange={(items) =>
+                    updateActiveRequest((prev) => ({ ...prev, bodyFormData: items }))
+                  }
+                />
+              </div>
+            )}
+
             {req.bodyType === 'x-www-form-urlencoded' && (
-              <KeyValueEditor
-                items={req.bodyUrlEncoded || []}
-                onChange={(items) => updateActiveRequest((prev) => ({ ...prev, bodyUrlEncoded: items }))}
-                keyPlaceholder="Key"
-                valuePlaceholder="Value"
-              />
+              <div className="flex-1 overflow-y-auto">
+                <KeyValueEditor
+                  items={req.bodyUrlEncoded || []}
+                  onChange={(items) =>
+                    updateActiveRequest((prev) => ({ ...prev, bodyUrlEncoded: items }))
+                  }
+                  keyPlaceholder="Parameter"
+                  valuePlaceholder="Value"
+                />
+              </div>
             )}
 
             {req.bodyType === 'graphql' && (

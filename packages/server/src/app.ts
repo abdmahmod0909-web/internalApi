@@ -240,8 +240,8 @@ export function buildApp(): FastifyInstance {
       workspaceId?: string;
     };
 
-    if (!body?.request || !body.request.url) {
-      throw app.httpErrors.badRequest('Invalid request: URL is required');
+    if (!body?.request || !body.request.url || !body.request.url.trim()) {
+      throw app.httpErrors.badRequest('Invalid request: URL is required and cannot be empty');
     }
 
     const wsId = body.workspaceId || 'ws-default-company';

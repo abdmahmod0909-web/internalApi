@@ -293,9 +293,14 @@ export const Navbar: React.FC = () => {
         {activeView === 'requests' && (
           <>
             <button
-              onClick={() => sendRequest()}
-              disabled={activeTab?.isLoading}
-              className="flex items-center space-x-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors"
+              onClick={() => {
+                if (activeTab?.request?.url?.trim()) {
+                  sendRequest();
+                }
+              }}
+              disabled={activeTab?.isLoading || !activeTab?.request?.url?.trim()}
+              className="flex items-center space-x-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-3 py-1.5 rounded transition-colors"
+              title={!activeTab?.request?.url?.trim() ? 'Enter a URL to send request' : 'Send Request (Ctrl+Enter)'}
             >
               <Play className="w-3.5 h-3.5 fill-current" />
               <span>Send</span>

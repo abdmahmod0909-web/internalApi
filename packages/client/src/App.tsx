@@ -42,7 +42,11 @@ export const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        sendRequest();
+        const state = useAppStore.getState();
+        const activeTab = state.tabs.find((t) => t.id === state.activeTabId);
+        if (activeTab?.request?.url?.trim()) {
+          sendRequest();
+        }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         saveCurrentRequest();

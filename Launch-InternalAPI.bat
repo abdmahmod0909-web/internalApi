@@ -7,12 +7,16 @@ netstat -aon | findstr ":3001.*LISTENING" >nul 2>&1
 if %errorlevel% neq 0 (
     netstat -aon | findstr ":3000.*LISTENING" >nul 2>&1
     if %errorlevel% neq 0 (
-        echo Starting InternalAPI background service on port 3001...
-        powershell.exe -WindowStyle Hidden -Command "Start-Process -FilePath 'node' -ArgumentList 'packages/server/dist/index.js' -WorkingDirectory '%cd%' -WindowStyle Hidden"
-        timeout /t 2 /nobreak >nul
+        echo Starting InternalAPI background service...
+        wscript "%~dp0start-service.vbs"
     )
 )
 
-:: 2. Launch Desktop App
-start "" "%~dp0InternalAPI-win32-x64\InternalAPI.exe"
+:: 2. Launch Desktop App if directory exists
+if exist "%~dp0InternalAPI-win32-x64\InternalAPI.exe" (
+    start "" "%~dp0InternalAPI-win32-x64\InternalAPI.exe"
+) else (
+    echo Desktop binary not in default folder. Starting browser at http://localhost:3001 ...
+    start http://localhost:3001/
+)
 exit
