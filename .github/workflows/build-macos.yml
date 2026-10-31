@@ -72,13 +72,21 @@ jobs:
           # 1. Ensure Mach-O executable permissions
           chmod -R +x "$APP_PATH/Contents/MacOS/InternalAPI"
 
-          # 2. Create standard macOS DMG disk image
+          # 2. Ad-hoc re-sign entire application bundle (required on macOS arm64 after file injection)
+          codesign --force --deep -s - "$APP_PATH"
+
+          # 3. Create DMG staging folder with Applications drag-and-drop symlink
+          mkdir dmg_staging
+          cp -R "$APP_PATH" dmg_staging/
+          ln -s /Applications dmg_staging/Applications
+
+          # 4. Create standard macOS DMG disk image
           hdiutil create -volname "InternalAPI" \
-            -srcfolder "$APP_PATH" \
+            -srcfolder dmg_staging \
             -ov -format UDZO \
             "InternalAPI-macOS-${{ matrix.arch }}.dmg"
 
-          # 3. Create ZIP archive preserving Apple resource forks & executable flags
+          # 5. Create ZIP archive preserving Apple resource forks & executable flags
           ditto -c -k --sequesterRsrc --keepParent \
             "$APP_PATH" \
             "InternalAPI-macOS-${{ matrix.arch }}.zip"

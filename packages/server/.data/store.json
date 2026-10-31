@@ -85,6 +85,36 @@
       "status": 0,
       "size": 0,
       "time": 0,
+      "id": "hist-fd67c9d4-2814-4370-9c8a-5d364c661144",
+      "createdAt": "2026-10-31T10:06:51.519Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-ea223182-64a7-4e14-8f80-8ac470314dc1",
+      "createdAt": "2026-10-31T10:06:30.865Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-de9c8716-d114-49f4-bac9-a872456274f2",
+      "createdAt": "2026-10-31T09:33:07.281Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
       "id": "hist-1c775426-8429-4061-a534-19271bb2f481",
       "createdAt": "2026-10-31T09:16:24.091Z"
     },
