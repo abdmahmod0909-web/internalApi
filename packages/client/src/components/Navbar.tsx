@@ -17,6 +17,7 @@ import {
   Workflow,
   Radio,
   Globe,
+  Sparkles,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -41,6 +42,8 @@ export const Navbar: React.FC = () => {
     tabs,
     activeTabId,
     flows,
+    otaInfo,
+    setOtaModalOpen,
   } = useAppStore();
 
   const [isWsDropdownOpen, setIsWsDropdownOpen] = useState(false);
@@ -232,6 +235,27 @@ export const Navbar: React.FC = () => {
 
       {/* Right Controls: Quick Actions, Environments, Settings */}
       <div className="flex items-center space-x-2">
+        {/* OTA Hot Update Notification or Version Badge */}
+        {otaInfo?.hasUpdate ? (
+          <button
+            onClick={() => setOtaModalOpen(true)}
+            className="flex items-center space-x-1.5 px-2.5 py-1 text-xs font-semibold bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-white rounded shadow-sm transition-all animate-pulse"
+            title={`New UI Hot Update v${otaInfo.latestVersion} available! Click to install.`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+            <span>Update v{otaInfo.latestVersion}</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setOtaModalOpen(true)}
+            className="flex items-center space-x-1 px-2 py-1 text-[11px] text-gray-400 hover:text-gray-200 bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+            title="Check for Over-The-Air updates or view version info"
+          >
+            <Sparkles className="w-3 h-3 text-orange-400" />
+            <span className="hidden xl:inline">{otaInfo?.currentVersion ? `v${otaInfo.currentVersion}` : 'Updates'}</span>
+          </button>
+        )}
+
         {/* Open in Web Browser Button */}
         <a
           href="http://127.0.0.1:39281/"

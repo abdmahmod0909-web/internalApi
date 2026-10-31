@@ -98,8 +98,11 @@ jobs:
             ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir InternalAPI-linux-x86_64.AppImage || true
           fi
 
+          # 3. Build OTA UI Hot Push Bundle (~350 KB)
+          tar -czvf ui-bundle.tar.gz -C packages/client/dist .
+
           echo "Linux packages ready:"
-          ls -lh InternalAPI-linux*
+          ls -lh InternalAPI-linux* ui-bundle.tar.gz
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -108,6 +111,7 @@ jobs:
           path: |
             InternalAPI-linux-x64.tar.gz
             InternalAPI-linux-x86_64.AppImage
+            ui-bundle.tar.gz
           if-no-files-found: warn
           retention-days: 30
 
@@ -119,5 +123,6 @@ jobs:
           files: |
             InternalAPI-linux-x64.tar.gz
             InternalAPI-linux-x86_64.AppImage
+            ui-bundle.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

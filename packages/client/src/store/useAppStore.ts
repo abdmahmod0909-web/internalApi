@@ -27,6 +27,20 @@ export interface TabItem {
   scriptLogs?: string[];
 }
 
+export interface OtaInfo {
+  hasUpdate: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  isOtaActive?: boolean;
+  releaseName?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  assetName?: string;
+  assetUrl?: string;
+  assetSize?: number;
+  message?: string;
+}
+
 const DEFAULT_NEW_REQUEST: ApiRequestData = {
   name: '',
   method: 'GET',
@@ -67,6 +81,15 @@ interface AppState {
   activeFlowId: string | null;
   flowReport: FlowExecutionReport | null;
   isFlowRunning: boolean;
+
+  // OTA Hot Push state
+  otaInfo: OtaInfo | null;
+  isOtaModalOpen: boolean;
+  isApplyingOta: boolean;
+  setOtaModalOpen: (open: boolean) => void;
+  checkOtaUpdates: () => Promise<void>;
+  applyOtaUpdateAction: () => Promise<boolean>;
+  revertOtaAction: () => Promise<void>;
 
   // Actions
   setCommandPaletteOpen: (open: boolean) => void;
@@ -214,6 +237,56 @@ export const useAppStore = create<AppState>((set, get) => ({
   flowReport: null,
   isFlowRunning: false,
 
+  // OTA state
+  otaInfo: null,
+  isOtaModalOpen: false,
+  isApplyingOta: false,
+  setOtaModalOpen: (open) => set({ isOtaModalOpen: open }),
+
+  checkOtaUpdates: async () => {
+    try {
+      const res = await fetch('/api/ota/check');
+      if (res.ok) {
+        const data = await res.json();
+        set({ otaInfo: data });
+      }
+    } catch (_) {}
+  },
+
+  applyOtaUpdateAction: async () => {
+    const ota = get().otaInfo;
+    if (!ota?.assetUrl || !ota?.latestVersion) return false;
+    set({ isApplyingOta: true });
+    try {
+      const res = await fetch('/api/ota/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          assetUrl: ota.assetUrl,
+          latestVersion: ota.latestVersion,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to apply update');
+      return true;
+    } catch (err: any) {
+      alert(`Update failed: ${err.message}`);
+      return false;
+    } finally {
+      set({ isApplyingOta: false });
+    }
+  },
+
+  revertOtaAction: async () => {
+    if (!confirm('Revert UI to the factory bundled version?')) return;
+    try {
+      await fetch('/api/ota/revert', { method: 'POST' });
+      window.location.reload();
+    } catch (err: any) {
+      alert(`Revert failed: ${err.message}`);
+    }
+  },
+
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
   setEnvModalOpen: (open) => set({ isEnvModalOpen: open }),
   setImportModalOpen: (open) => set({ isImportModalOpen: open }),
@@ -267,6 +340,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       setStoredItem('internalapi_collections', JSON.stringify(collections));
       setStoredItem('internalapi_environments', JSON.stringify(environments));
+
+      // Trigger background OTA check for lightweight UI updates
+      get().checkOtaUpdates();
     } catch (e) {
       console.error('Failed to load initial data:', e);
     }

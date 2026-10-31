@@ -18,6 +18,13 @@ import {
 } from './storage/db-sync.js';
 import { executeProxyRequest } from './proxy/http-client.js';
 import { fetchOAuth2ClientCredentials } from './proxy/oauth2.js';
+import {
+  getOtaDistPath,
+  getOtaStatus,
+  checkForUpdates,
+  applyOtaUpdate,
+  revertOtaUpdate,
+} from './ota/ota-service.js';
 
 export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   const isDesktop = process.env.DESKTOP_STANDALONE === 'true' || typeof (process as any).versions?.electron !== 'undefined';
@@ -45,8 +52,10 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     },
   });
 
-  // Serve static client build if present
+  // Serve static client build if present (OTA user directory prioritized)
+  const otaPath = getOtaDistPath();
   const possibleDistPaths = [
+    otaPath, // 1. Check Over-The-Air hot push directory first
     path.resolve(__dirname, 'client_dist'),
     path.resolve(__dirname, '../client_dist'),
     path.resolve(process.cwd(), 'client_dist'),
@@ -300,6 +309,35 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
         error: err.message || 'Failed to execute request',
       };
     }
+  });
+
+  // =========================================================================
+  // Over-The-Air (OTA) UI Hot Push Endpoints
+  // =========================================================================
+
+  // Get current OTA and app version status
+  app.get('/api/ota/status', async () => {
+    return getOtaStatus(staticPath);
+  });
+
+  // Check GitHub Releases for newer UI bundle
+  app.get('/api/ota/check', async (req) => {
+    const query = req.query as { repo?: string };
+    return checkForUpdates(staticPath, query?.repo);
+  });
+
+  // Apply downloaded UI bundle
+  app.post('/api/ota/apply', async (req) => {
+    const body = req.body as { assetUrl: string; latestVersion: string };
+    if (!body?.assetUrl || !body?.latestVersion) {
+      throw app.httpErrors.badRequest('assetUrl and latestVersion are required');
+    }
+    return applyOtaUpdate(body.assetUrl, body.latestVersion);
+  });
+
+  // Revert back to the bundled version that came with desktop installer
+  app.post('/api/ota/revert', async () => {
+    return revertOtaUpdate();
   });
 
   return app;

@@ -1,0 +1,59 @@
+name: Hot Push UI Update (OTA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag to attach hot update to (e.g. v1.0.3)'
+        required: true
+        type: string
+        default: 'v1.0.3'
+
+permissions:
+  contents: write
+
+jobs:
+  hot-push:
+    name: Build & Publish UI Bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Prepare Environment File
+        run: cp .env.example .env
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Monorepo (Shared, Server, Client)
+        run: npm run build
+
+      - name: Package OTA UI Bundle (~350 KB)
+        run: |
+          tar -czvf ui-bundle.tar.gz -C packages/client/dist .
+          echo "Created ui-bundle.tar.gz successfully:"
+          ls -lh ui-bundle.tar.gz
+
+      - name: Upload UI Bundle Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-bundle
+          path: ui-bundle.tar.gz
+          retention-days: 30
+
+      - name: Publish Hot Push to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          files: ui-bundle.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
