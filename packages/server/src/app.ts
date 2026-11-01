@@ -21,6 +21,8 @@ import { fetchOAuth2ClientCredentials } from './proxy/oauth2.js';
 import {
   getOtaDistPath,
   getOtaStatus,
+  getCurrentVersion,
+  compareVersions,
   checkForUpdates,
   applyOtaUpdate,
   revertOtaUpdate,
@@ -52,10 +54,9 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     },
   });
 
-  // Serve static client build if present (OTA user directory prioritized)
+  // Serve static client build if present (Smart OTA & Bundled version resolution)
   const otaPath = getOtaDistPath();
-  const possibleDistPaths = [
-    otaPath, // 1. Check Over-The-Air hot push directory first
+  const bundledDistPaths = [
     path.resolve(__dirname, 'client_dist'),
     path.resolve(__dirname, '../client_dist'),
     path.resolve(process.cwd(), 'client_dist'),
@@ -69,7 +70,29 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     path.resolve(__dirname, '../../../client/dist'),
     path.resolve(__dirname, '../../../../packages/client/dist'),
   ];
-  const staticPath = possibleDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) || null;
+
+  const bundledStaticPath = bundledDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) || null;
+  const isOtaPresent = fs.existsSync(path.join(otaPath, 'index.html'));
+
+  let staticPath: string | null = null;
+
+  if (isOtaPresent && bundledStaticPath) {
+    const otaVer = getCurrentVersion(otaPath);
+    const bundledVer = getCurrentVersion(bundledStaticPath);
+    // If bundled app version >= OTA version, prioritize bundled and purge stale OTA cache
+    if (compareVersions(bundledVer, otaVer) >= 0) {
+      staticPath = bundledStaticPath;
+      try {
+        fs.rmSync(otaPath, { recursive: true, force: true });
+      } catch (_) {}
+    } else {
+      staticPath = otaPath;
+    }
+  } else if (isOtaPresent) {
+    staticPath = otaPath;
+  } else {
+    staticPath = bundledStaticPath;
+  }
 
   if (staticPath) {
     app.register(fastifyStatic, {

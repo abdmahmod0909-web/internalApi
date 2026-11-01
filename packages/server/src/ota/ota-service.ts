@@ -73,7 +73,7 @@ export function getOtaStatus(baseStaticPath?: string | null) {
  * Compare two semantic versions (e.g. "1.0.3" vs "1.0.2").
  * Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
  */
-function compareVersions(v1: string, v2: string): number {
+export function compareVersions(v1: string, v2: string): number {
   const p1 = v1.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
   const p2 = v2.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
   for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
@@ -87,52 +87,96 @@ function compareVersions(v1: string, v2: string): number {
 
 /**
  * Checks GitHub Releases for a newer UI bundle asset.
+ * Includes rate-limit-proof redirect fallback if GitHub REST API returns 403.
  */
 export async function checkForUpdates(baseStaticPath?: string | null, repo = 'abdmahmod0909-web/internalApi') {
   const status = getOtaStatus(baseStaticPath);
   const currentVersion = status.currentVersion;
 
   try {
-    const url = `https://api.github.com/repos/${repo}/releases/latest`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'InternalAPI-OTA/1.0',
-        'Accept': 'application/vnd.github.v3+json',
-      },
-    });
+    let tagName = '';
+    let latestVersion = '';
+    let releaseName = '';
+    let releaseNotes = '';
+    let publishedAt: string | null = null;
+    let assetName: string | null = null;
+    let assetUrl: string | null = null;
+    let assetSize = 0;
+    let hasAsset = false;
 
-    if (!res.ok) {
+    // 1. Try standard GitHub REST API
+    try {
+      const url = `https://api.github.com/repos/${repo}/releases/latest`;
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'InternalAPI-OTA/1.0',
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+
+      if (res.ok) {
+        const release = (await res.json()) as any;
+        tagName = release.tag_name || '';
+        latestVersion = tagName.replace(/^v/, '');
+        const assets = release.assets || [];
+        const uiBundleAsset = assets.find(
+          (a: any) => a.name === 'ui-bundle.tar.gz' || a.name === 'ui-bundle.zip'
+        );
+        if (uiBundleAsset) {
+          hasAsset = true;
+          assetName = uiBundleAsset.name;
+          assetUrl = uiBundleAsset.browser_download_url;
+          assetSize = uiBundleAsset.size;
+        }
+        releaseName = release.name || tagName;
+        releaseNotes = release.body || '';
+        publishedAt = release.published_at || null;
+      }
+    } catch (_) {}
+
+    // 2. If REST API was rate-limited (403) or failed, fallback to zero-rate-limit GitHub redirect
+    if (!latestVersion) {
+      try {
+        const redirectRes = await fetch(`https://github.com/${repo}/releases/latest`, {
+          redirect: 'manual',
+          headers: { 'User-Agent': 'InternalAPI-OTA/1.0' },
+        });
+        const location = redirectRes.headers.get('location') || '';
+        const tagMatch = location.match(/\/releases\/tag\/([^/?#]+)/);
+        if (tagMatch && tagMatch[1]) {
+          tagName = tagMatch[1];
+          latestVersion = tagName.replace(/^v/, '');
+          assetName = 'ui-bundle.tar.gz';
+          assetUrl = `https://github.com/${repo}/releases/download/${tagName}/ui-bundle.tar.gz`;
+          hasAsset = true;
+          releaseName = tagName;
+          releaseNotes = `OTA Hot Update release ${tagName}`;
+        }
+      } catch (_) {}
+    }
+
+    if (!latestVersion) {
       return {
         hasUpdate: false,
         currentVersion,
         isOtaActive: status.isOtaActive,
-        message: `GitHub Releases API responded with status ${res.status}`,
+        message: 'Could not resolve latest release from GitHub',
       };
     }
-
-    const release = (await res.json()) as any;
-    const tagName = release.tag_name || '';
-    const latestVersion = tagName.replace(/^v/, '');
-
-    // Look for ui-bundle.tar.gz in release assets
-    const assets = release.assets || [];
-    const uiBundleAsset = assets.find(
-      (a: any) => a.name === 'ui-bundle.tar.gz' || a.name === 'ui-bundle.zip'
-    );
 
     const isNewer = compareVersions(latestVersion, currentVersion) > 0;
 
     return {
-      hasUpdate: isNewer && !!uiBundleAsset,
+      hasUpdate: isNewer && hasAsset,
       currentVersion,
       latestVersion,
       isOtaActive: status.isOtaActive,
-      releaseName: release.name || tagName,
-      releaseNotes: release.body || '',
-      publishedAt: release.published_at,
-      assetName: uiBundleAsset?.name || null,
-      assetUrl: uiBundleAsset?.browser_download_url || null,
-      assetSize: uiBundleAsset?.size || 0,
+      releaseName: releaseName || tagName,
+      releaseNotes: releaseNotes || '',
+      publishedAt: publishedAt || new Date().toISOString(),
+      assetName,
+      assetUrl,
+      assetSize,
     };
   } catch (err: any) {
     return {

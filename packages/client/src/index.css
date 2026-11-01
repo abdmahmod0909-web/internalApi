@@ -327,32 +327,44 @@ html.theme-light .bg-emerald-950\/70 * {
 }
 
 /* 10. JSON Viewer Syntax Highlighting */
-html.theme-light .text-sky-400 {
-  color: #0284c7 !important; /* Property keys */
+html.theme-light .text-sky-400,
+html.theme-light .text-sky-300 {
+  color: #0369a1 !important; /* Property keys (Columns) */
 }
 
 html.theme-light .text-emerald-400 {
-  color: #16a34a !important; /* Strings */
+  color: #15803d !important; /* Strings (Values) */
 }
 
-html.theme-light .text-amber-400 {
-  color: #d97706 !important; /* Numbers */
+html.theme-light .text-amber-400,
+html.theme-light .text-amber-300 {
+  color: #b45309 !important; /* Numbers */
 }
 
 html.theme-light .text-purple-400 {
-  color: #7c3aed !important; /* Booleans */
+  color: #6d28d9 !important; /* Booleans */
 }
 
 html.theme-light .text-rose-400 {
-  color: #dc2626 !important; /* Null */
+  color: #b91c1c !important; /* Null */
+}
+
+html.theme-light .text-amber-500\/90,
+html.theme-light .text-amber-500 {
+  color: #d97706 !important; /* Brackets & Braces */
 }
 
 html.theme-light .border-gray-800\/80 {
   border-color: #e2e8f0 !important;
 }
 
-html.theme-light .hover\:bg-gray-900\/60:hover {
+html.theme-light .hover\:bg-gray-900\/60:hover,
+html.theme-light .hover\:bg-gray-900\/70:hover {
   background-color: #f1f5f9 !important;
+}
+
+mark {
+  border-radius: 2px;
 }
 
 /* 11. Modals & Dialog Windows */

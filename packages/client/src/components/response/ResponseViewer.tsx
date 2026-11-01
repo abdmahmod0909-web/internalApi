@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
-import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText } from 'lucide-react';
-import { JsonViewer } from './JsonViewer.js';
+import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText, X } from 'lucide-react';
+import { JsonViewer, highlightMatch } from './JsonViewer.js';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -24,6 +24,23 @@ export const ResponseViewer: React.FC = () => {
 
   const passedTestsCount = testResults?.filter((t) => t.passed).length || 0;
   const totalTestsCount = testResults?.length || 0;
+
+  const matchCount = useMemo(() => {
+    if (!searchTerm || !searchTerm.trim() || !response?.body) return 0;
+    try {
+      const q = searchTerm.trim().toLowerCase();
+      let count = 0;
+      let pos = 0;
+      const bodyLower = response.body.toLowerCase();
+      while ((pos = bodyLower.indexOf(q, pos)) !== -1) {
+        count++;
+        pos += q.length;
+      }
+      return count;
+    } catch {
+      return 0;
+    }
+  }, [searchTerm, response?.body]);
 
   if (!response) {
     return (
@@ -154,17 +171,31 @@ export const ResponseViewer: React.FC = () => {
           ))}
         </div>
 
-        {/* Quick Search */}
+        {/* Quick Search for Keys (Columns) and Data (Values) */}
         {(activeTab === 'pretty' || activeTab === 'raw') && (
-          <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-2 py-0.5 my-1">
-            <Search className="w-3 h-3 text-gray-500 mr-1.5" />
+          <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-2 py-0.5 my-1 focus-within:border-orange-500 transition-colors">
+            <Search className="w-3 h-3 text-gray-500 mr-1.5 shrink-0" />
             <input
               type="text"
-              placeholder="Search response..."
+              placeholder="Search keys & values..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="bg-transparent text-[11px] text-gray-200 outline-none w-36 placeholder-gray-600"
             />
+            {searchTerm && (
+              <div className="flex items-center space-x-1.5 ml-1 text-[10px] border-l border-gray-800 pl-1.5 shrink-0">
+                <span className={matchCount > 0 ? 'text-amber-400 font-semibold' : 'text-gray-500'}>
+                  {matchCount} {matchCount === 1 ? 'match' : 'matches'}
+                </span>
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-gray-400 hover:text-gray-200 p-0.5 rounded transition-colors"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -182,8 +213,8 @@ export const ResponseViewer: React.FC = () => {
         )}
 
         {activeTab === 'raw' && (
-          <pre className="font-mono text-[11px] text-gray-300 whitespace-pre-wrap select-text">
-            {response.body}
+          <pre className="font-mono text-[11px] text-gray-300 whitespace-pre-wrap select-text leading-relaxed">
+            {highlightMatch(response.body, searchTerm, 'text-gray-300')}
           </pre>
         )}
 

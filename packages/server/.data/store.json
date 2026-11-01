@@ -210,6 +210,76 @@
       "status": 0,
       "size": 0,
       "time": 0,
+      "id": "hist-8add6f2d-2f77-4303-9d0a-f61f161ae186",
+      "createdAt": "2026-11-01T09:14:22.663Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/languages",
+      "status": 200,
+      "size": 81,
+      "time": 525,
+      "id": "hist-4ae9af75-f961-40c1-a669-c3dab87b02d9",
+      "createdAt": "2026-11-01T07:47:46.590Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/languages",
+      "status": 200,
+      "size": 81,
+      "time": 232,
+      "id": "hist-f49c58f0-d1d6-46dd-99d1-55e3ae6431e6",
+      "createdAt": "2026-11-01T07:47:12.012Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/languages",
+      "status": 200,
+      "size": 81,
+      "time": 545,
+      "id": "hist-f4ec8a44-b97c-4c5a-8c4b-7c4bcee33f0c",
+      "createdAt": "2026-11-01T07:47:10.116Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://staging-lms-content-bank.joacademy.com/api/v1/exam?exam_id=5762",
+      "status": 200,
+      "size": 3109,
+      "time": 723,
+      "id": "hist-ec64e767-5870-45c4-868e-f4e9a542cc1f",
+      "createdAt": "2026-11-01T07:46:48.981Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/languages",
+      "status": 200,
+      "size": 81,
+      "time": 529,
+      "id": "hist-8bb7835a-5170-4e7b-a8d0-eaf5e2ce6832",
+      "createdAt": "2026-11-01T07:46:46.393Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/languages",
+      "status": 200,
+      "size": 81,
+      "time": 724,
+      "id": "hist-6dd89605-5e32-4063-8e6f-613f4bb4ac62",
+      "createdAt": "2026-11-01T07:46:37.761Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
       "id": "hist-501bd38b-9f37-4e94-8a63-fde1afe13b02",
       "createdAt": "2026-10-31T13:31:51.059Z"
     },

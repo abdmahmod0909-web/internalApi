@@ -122,6 +122,7 @@ interface AppState {
   setActiveTabId: (tabId: string) => void;
   updateActiveRequest: (updater: (prev: ApiRequestData) => ApiRequestData) => void;
   sendRequest: (tabId?: string) => Promise<void>;
+  cancelRequest: (tabId?: string) => void;
   saveCurrentRequest: (collectionId?: string, folderId?: string | null) => Promise<void>;
   saveEnvironment: (env: Environment) => Promise<void>;
   deleteEnvironment: (id: string) => Promise<void>;
@@ -212,6 +213,9 @@ function getInitialEnvironments(): Environment[] {
 
 const initialTabs = getInitialTabs();
 const initialActiveTabId = getStoredItem('internalapi_active_tab_id', initialTabs[0]?.id || 'tab-1');
+
+// In-flight request abort controllers per tab
+const inFlightControllers = new Map<string, AbortController>();
 
 export const useAppStore = create<AppState>((set, get) => ({
   workspaces: [],
@@ -458,6 +462,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     setStoredItem('internalapi_tabs', JSON.stringify(updatedTabs));
   },
 
+  cancelRequest: (targetTabId) => {
+    const tabId = targetTabId || get().activeTabId;
+    const controller = inFlightControllers.get(tabId);
+    if (controller) {
+      try {
+        controller.abort();
+      } catch (_) {}
+      inFlightControllers.delete(tabId);
+    }
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? {
+              ...t,
+              isLoading: false,
+              response: {
+                status: 0,
+                statusText: 'Canceled',
+                headers: {},
+                cookies: [],
+                body: 'Request canceled by user.',
+                size: 0,
+                time: 0,
+              },
+            }
+          : t
+      ),
+    }));
+  },
+
   sendRequest: async (targetTabId) => {
     const { tabs, activeTabId, activeEnvironmentId, activeWorkspaceId, environments, saveEnvironment } = get();
     const tabId = targetTabId || activeTabId;
@@ -468,6 +502,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!tab.request?.url || !tab.request.url.trim()) {
       return;
     }
+
+    // Abort any existing in-flight request for this tab
+    const existingController = inFlightControllers.get(tabId);
+    if (existingController) {
+      try {
+        existingController.abort();
+      } catch (_) {}
+    }
+    const controller = new AbortController();
+    inFlightControllers.set(tabId, controller);
 
     // Set loading
     set({
@@ -523,6 +567,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           environmentId: activeEnvironmentId,
           workspaceId: activeWorkspaceId,
         }),
+        signal: controller.signal,
       });
 
       const responseData: ApiResponseData = await res.json();
@@ -588,6 +633,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Refresh history list
       get().refreshHistory();
     } catch (err: any) {
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === tabId
+              ? {
+                  ...t,
+                  isLoading: false,
+                  response: {
+                    status: 0,
+                    statusText: 'Canceled',
+                    headers: {},
+                    cookies: [],
+                    body: 'Request canceled by user.',
+                    size: 0,
+                    time: 0,
+                  },
+                }
+              : t
+          ),
+        }));
+        return;
+      }
+
       set((state) => ({
         tabs: state.tabs.map((t) =>
           t.id === tabId
@@ -608,6 +676,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             : t
         ),
       }));
+    } finally {
+      if (inFlightControllers.get(tabId) === controller) {
+        inFlightControllers.delete(tabId);
+      }
     }
   },
 

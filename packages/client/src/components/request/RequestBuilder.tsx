@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
 import { FormDataEditor } from './FormDataEditor.js';
-import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy } from 'lucide-react';
+import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy, X } from 'lucide-react';
 import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
 
@@ -14,7 +14,7 @@ export const RequestBuilder: React.FC = () => {
   const [curlImportNotice, setCurlImportNotice] = useState<string | null>(null);
   const [isCurlCopied, setIsCurlCopied] = useState(false);
 
-  const { tabs, activeTabId, updateActiveRequest, sendRequest, saveCurrentRequest } = useAppStore();
+  const { tabs, activeTabId, updateActiveRequest, sendRequest, cancelRequest, saveCurrentRequest } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
 
   if (!currentTab) {
@@ -232,24 +232,31 @@ export const RequestBuilder: React.FC = () => {
           </button>
         </div>
 
-        {/* Send Button */}
-        <button
-          onClick={() => {
-            if (req.url?.trim()) {
-              sendRequest();
-            }
-          }}
-          disabled={currentTab.isLoading || !req.url?.trim()}
-          className="flex items-center justify-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2 rounded-md transition-colors shrink-0 shadow-sm min-w-[76px]"
-          title={!req.url?.trim() ? 'Enter a URL to send request' : 'Send Request'}
-        >
-          {currentTab.isLoading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
+        {/* Send / Cancel Button */}
+        {currentTab.isLoading ? (
+          <button
+            onClick={() => cancelRequest(currentTab.id)}
+            className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-md transition-all shrink-0 shadow-sm min-w-[76px] animate-pulse"
+            title="Cancel ongoing request"
+          >
+            <X className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Cancel</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              if (req.url?.trim()) {
+                sendRequest();
+              }
+            }}
+            disabled={!req.url?.trim()}
+            className="flex items-center justify-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2 rounded-md transition-colors shrink-0 shadow-sm min-w-[76px]"
+            title={!req.url?.trim() ? 'Enter a URL to send request' : 'Send Request (Ctrl+Enter)'}
+          >
             <Play className="w-3.5 h-3.5 fill-current" />
-          )}
-          <span>Send</span>
-        </button>
+            <span>Send</span>
+          </button>
+        )}
       </div>
 
       {/* Auto-imported cURL Notice Banner */}
