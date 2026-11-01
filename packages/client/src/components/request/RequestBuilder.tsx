@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
 import { FormDataEditor } from './FormDataEditor.js';
+import { JsonEditor } from './JsonEditor.js';
 import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy, X } from 'lucide-react';
 import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
@@ -603,12 +604,23 @@ export const RequestBuilder: React.FC = () => {
               </div>
             )}
 
-            {(req.bodyType === 'json' || req.bodyType === 'raw') && (
+            {req.bodyType === 'json' && (
+              <div className="flex-1 min-h-[220px]">
+                <JsonEditor
+                  value={req.bodyContent || ''}
+                  onChange={(val) => updateActiveRequest((prev) => ({ ...prev, bodyContent: val }))}
+                  placeholder={'{\n  "key": "value"\n}'}
+                  className="min-h-[240px] h-full"
+                />
+              </div>
+            )}
+
+            {req.bodyType === 'raw' && (
               <div className="flex-1 min-h-[220px]">
                 <textarea
                   value={req.bodyContent || ''}
                   onChange={(e) => updateActiveRequest((prev) => ({ ...prev, bodyContent: e.target.value }))}
-                  placeholder={req.bodyType === 'json' ? '{\n  "key": "value"\n}' : 'Raw text content'}
+                  placeholder="Raw text content"
                   className="w-full h-full min-h-[220px] bg-gray-900 border border-gray-800 rounded p-3 text-xs text-gray-100 font-mono outline-none focus:border-gray-700 resize-y"
                 />
               </div>

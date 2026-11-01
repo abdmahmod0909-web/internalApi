@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
-import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText, X } from 'lucide-react';
+import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { JsonViewer, highlightMatch } from './JsonViewer.js';
 
 function formatBytes(bytes: number): string {
@@ -15,6 +15,18 @@ export const ResponseViewer: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'pretty' | 'raw' | 'preview' | 'headers' | 'cookies' | 'tests'>('pretty');
   const [copied, setCopied] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeMatchIndex, setActiveMatchIndex] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
+
+  const goToNextMatch = () => {
+    if (totalMatches === 0) return;
+    setActiveMatchIndex((prev) => (prev + 1) % totalMatches);
+  };
+
+  const goToPrevMatch = () => {
+    if (totalMatches === 0) return;
+    setActiveMatchIndex((prev) => (prev - 1 + totalMatches) % totalMatches);
+  };
 
   const { tabs, activeTabId } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
@@ -171,7 +183,7 @@ export const ResponseViewer: React.FC = () => {
           ))}
         </div>
 
-        {/* Quick Search for Keys (Columns) and Data (Values) */}
+        {/* Quick Search for Keys (Columns) and Data (Values) with Match Navigation */}
         {(activeTab === 'pretty' || activeTab === 'raw') && (
           <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-2 py-0.5 my-1 focus-within:border-orange-500 transition-colors">
             <Search className="w-3 h-3 text-gray-500 mr-1.5 shrink-0" />
@@ -179,18 +191,54 @@ export const ResponseViewer: React.FC = () => {
               type="text"
               placeholder="Search keys & values..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setActiveMatchIndex(0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (e.shiftKey) goToPrevMatch();
+                  else goToNextMatch();
+                } else if (e.key === 'Escape') {
+                  setSearchTerm('');
+                  setActiveMatchIndex(0);
+                }
+              }}
               className="bg-transparent text-[11px] text-gray-200 outline-none w-36 placeholder-gray-600"
             />
             {searchTerm && (
               <div className="flex items-center space-x-1.5 ml-1 text-[10px] border-l border-gray-800 pl-1.5 shrink-0">
-                <span className={matchCount > 0 ? 'text-amber-400 font-semibold' : 'text-gray-500'}>
-                  {matchCount} {matchCount === 1 ? 'match' : 'matches'}
+                <span className={totalMatches > 0 ? 'text-amber-400 font-semibold' : 'text-gray-500'}>
+                  {totalMatches > 0 ? `${activeMatchIndex + 1} of ${totalMatches}` : '0 matches'}
                 </span>
+
+                {totalMatches > 0 && (
+                  <div className="flex items-center space-x-0.5">
+                    <button
+                      onClick={goToPrevMatch}
+                      className="text-gray-400 hover:text-white hover:bg-gray-800 p-0.5 rounded transition-colors"
+                      title="Previous match (Shift+Enter)"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={goToNextMatch}
+                      className="text-gray-400 hover:text-white hover:bg-gray-800 p-0.5 rounded transition-colors"
+                      title="Next match (Enter)"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
                 <button
-                  onClick={() => setSearchTerm('')}
+                  onClick={() => {
+                    setSearchTerm('');
+                    setActiveMatchIndex(0);
+                  }}
                   className="text-gray-400 hover:text-gray-200 p-0.5 rounded transition-colors"
-                  title="Clear search"
+                  title="Clear search (Esc)"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -209,7 +257,12 @@ export const ResponseViewer: React.FC = () => {
         )}
 
         {activeTab === 'pretty' && (
-          <JsonViewer jsonString={response.body} searchTerm={searchTerm} />
+          <JsonViewer
+            jsonString={response.body}
+            searchTerm={searchTerm}
+            activeMatchIndex={activeMatchIndex}
+            onTotalMatchesChange={setTotalMatches}
+          />
         )}
 
         {activeTab === 'raw' && (
