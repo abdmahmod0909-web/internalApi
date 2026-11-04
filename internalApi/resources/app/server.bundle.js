@@ -105268,40 +105268,83 @@ async function checkForUpdates(baseStaticPath, repo = "abdmahmod0909-web/interna
   const status = getOtaStatus(baseStaticPath);
   const currentVersion = status.currentVersion;
   try {
-    const url = `https://api.github.com/repos/${repo}/releases/latest`;
-    const res = await (0, import_undici.fetch)(url, {
-      headers: {
-        "User-Agent": "InternalAPI-OTA/1.0",
-        "Accept": "application/vnd.github.v3+json"
+    let tagName = "";
+    let latestVersion = "";
+    let releaseName = "";
+    let releaseNotes = "";
+    let publishedAt = null;
+    let assetName = null;
+    let assetUrl = null;
+    let assetSize = 0;
+    let hasAsset = false;
+    try {
+      const url = `https://api.github.com/repos/${repo}/releases/latest`;
+      const res = await (0, import_undici.fetch)(url, {
+        headers: {
+          "User-Agent": "InternalAPI-OTA/1.0",
+          "Accept": "application/vnd.github.v3+json"
+        }
+      });
+      if (res.ok) {
+        const release = await res.json();
+        tagName = release.tag_name || "";
+        latestVersion = tagName.replace(/^v/, "");
+        const assets = release.assets || [];
+        const uiBundleAsset = assets.find(
+          (a) => a.name === "ui-bundle.tar.gz" || a.name === "ui-bundle.zip"
+        );
+        if (uiBundleAsset) {
+          hasAsset = true;
+          assetName = uiBundleAsset.name;
+          assetUrl = uiBundleAsset.browser_download_url;
+          assetSize = uiBundleAsset.size;
+        }
+        releaseName = release.name || tagName;
+        releaseNotes = release.body || "";
+        publishedAt = release.published_at || null;
       }
-    });
-    if (!res.ok) {
+    } catch (_) {
+    }
+    if (!latestVersion) {
+      try {
+        const redirectRes = await (0, import_undici.fetch)(`https://github.com/${repo}/releases/latest`, {
+          redirect: "manual",
+          headers: { "User-Agent": "InternalAPI-OTA/1.0" }
+        });
+        const location = redirectRes.headers.get("location") || "";
+        const tagMatch = location.match(/\/releases\/tag\/([^/?#]+)/);
+        if (tagMatch && tagMatch[1]) {
+          tagName = tagMatch[1];
+          latestVersion = tagName.replace(/^v/, "");
+          assetName = "ui-bundle.tar.gz";
+          assetUrl = `https://github.com/${repo}/releases/download/${tagName}/ui-bundle.tar.gz`;
+          hasAsset = true;
+          releaseName = tagName;
+          releaseNotes = `OTA Hot Update release ${tagName}`;
+        }
+      } catch (_) {
+      }
+    }
+    if (!latestVersion) {
       return {
         hasUpdate: false,
         currentVersion,
         isOtaActive: status.isOtaActive,
-        message: `GitHub Releases API responded with status ${res.status}`
+        message: "Could not resolve latest release from GitHub"
       };
     }
-    const release = await res.json();
-    const tagName = release.tag_name || "";
-    const latestVersion = tagName.replace(/^v/, "");
-    const assets = release.assets || [];
-    const uiBundleAsset = assets.find(
-      (a) => a.name === "ui-bundle.tar.gz" || a.name === "ui-bundle.zip"
-    );
     const isNewer = compareVersions(latestVersion, currentVersion) > 0;
     return {
-      hasUpdate: isNewer && !!uiBundleAsset,
+      hasUpdate: isNewer && hasAsset,
       currentVersion,
       latestVersion,
       isOtaActive: status.isOtaActive,
-      releaseName: release.name || tagName,
-      releaseNotes: release.body || "",
-      publishedAt: release.published_at,
-      assetName: uiBundleAsset?.name || null,
-      assetUrl: uiBundleAsset?.browser_download_url || null,
-      assetSize: uiBundleAsset?.size || 0
+      releaseName: releaseName || tagName,
+      releaseNotes: releaseNotes || "",
+      publishedAt: publishedAt || (/* @__PURE__ */ new Date()).toISOString(),
+      assetName,
+      assetUrl,
+      assetSize
     };
   } catch (err) {
     return {
@@ -105417,9 +105460,7 @@ function buildApp(opts) {
     }
   });
   const otaPath = getOtaDistPath();
-  const possibleDistPaths = [
-    otaPath,
-    // 1. Check Over-The-Air hot push directory first
+  const bundledDistPaths = [
     import_node_path3.default.resolve(__dirname, "client_dist"),
     import_node_path3.default.resolve(__dirname, "../client_dist"),
     import_node_path3.default.resolve(process.cwd(), "client_dist"),
@@ -105433,7 +105474,26 @@ function buildApp(opts) {
     import_node_path3.default.resolve(__dirname, "../../../client/dist"),
     import_node_path3.default.resolve(__dirname, "../../../../packages/client/dist")
   ];
-  const staticPath = possibleDistPaths.find((p) => import_node_fs3.default.existsSync(import_node_path3.default.join(p, "index.html"))) || null;
+  const bundledStaticPath = bundledDistPaths.find((p) => import_node_fs3.default.existsSync(import_node_path3.default.join(p, "index.html"))) || null;
+  const isOtaPresent = import_node_fs3.default.existsSync(import_node_path3.default.join(otaPath, "index.html"));
+  let staticPath = null;
+  if (isOtaPresent && bundledStaticPath) {
+    const otaVer = getCurrentVersion(otaPath);
+    const bundledVer = getCurrentVersion(bundledStaticPath);
+    if (compareVersions(bundledVer, otaVer) >= 0) {
+      staticPath = bundledStaticPath;
+      try {
+        import_node_fs3.default.rmSync(otaPath, { recursive: true, force: true });
+      } catch (_) {
+      }
+    } else {
+      staticPath = otaPath;
+    }
+  } else if (isOtaPresent) {
+    staticPath = otaPath;
+  } else {
+    staticPath = bundledStaticPath;
+  }
   if (staticPath) {
     app.register(import_static.default, {
       root: staticPath,
