@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
 import { FormDataEditor } from './FormDataEditor.js';
 import { JsonEditor } from './JsonEditor.js';
-import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy, X } from 'lucide-react';
+import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy, X, Eye, EyeOff, Clock, Folder, Code, Globe } from 'lucide-react';
 import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
 
@@ -15,8 +15,30 @@ export const RequestBuilder: React.FC = () => {
   const [curlImportNotice, setCurlImportNotice] = useState<string | null>(null);
   const [isCurlCopied, setIsCurlCopied] = useState(false);
 
-  const { tabs, activeTabId, updateActiveRequest, sendRequest, cancelRequest, saveCurrentRequest } = useAppStore();
+  const {
+    tabs,
+    activeTabId,
+    updateActiveRequest,
+    sendRequest,
+    cancelRequest,
+    saveCurrentRequest,
+    history,
+    collections,
+    environments,
+    activeEnvironmentId,
+  } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
+
+  // URL Auto-suggestions state
+  const [isUrlSuggestionsOpen, setIsUrlSuggestionsOpen] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const urlContainerRef = useRef<HTMLDivElement>(null);
+
+  // Password / Token visibility toggles
+  const [showBearerToken, setShowBearerToken] = useState(false);
+  const [showBasicPassword, setShowBasicPassword] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
 
   if (!currentTab) {
     return <div className="p-8 text-center text-gray-500">No active request tab.</div>;
@@ -56,6 +78,128 @@ export const RequestBuilder: React.FC = () => {
       return;
     }
     updateActiveRequest((prev) => ({ ...prev, url: value }));
+  };
+
+  // Close URL suggestions on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (urlContainerRef.current && !urlContainerRef.current.contains(e.target as Node)) {
+        setIsUrlSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Compute suggestions (History, Collections, Environment variables, Starter presets)
+  const urlSuggestions = useMemo(() => {
+    const query = req?.url?.trim().toLowerCase() || '';
+    const list: {
+      type: 'env' | 'history' | 'collection' | 'preset';
+      text: string;
+      label?: string;
+      method?: string;
+      value?: string;
+    }[] = [];
+    const seenUrls = new Set<string>();
+
+    // 1. Environment variables
+    const currentEnv = environments.find((e) => e.id === activeEnvironmentId);
+    if (currentEnv) {
+      for (const v of currentEnv.variables) {
+        if (v.isEnabled && v.key) {
+          const token = `{{${v.key}}}`;
+          if (!query || token.toLowerCase().includes(query) || v.key.toLowerCase().includes(query)) {
+            list.push({
+              type: 'env',
+              text: token,
+              label: v.key,
+              value: v.value,
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Collection requests
+    for (const col of collections) {
+      const inspect = (reqs: any[]) => {
+        for (const r of reqs) {
+          if (r.url && r.url.trim() && !seenUrls.has(r.url.trim())) {
+            seenUrls.add(r.url.trim());
+            if (!query || r.url.toLowerCase().includes(query) || (r.name && r.name.toLowerCase().includes(query))) {
+              list.push({
+                type: 'collection',
+                text: r.url.trim(),
+                label: r.name || r.url.trim(),
+                method: r.method || 'GET',
+              });
+            }
+          }
+        }
+      };
+      inspect(col.requests || []);
+      for (const f of col.folders || []) {
+        inspect(f.requests || []);
+      }
+    }
+
+    // 3. History URLs
+    for (const h of history) {
+      if (h.request?.url && h.request.url.trim() && !seenUrls.has(h.request.url.trim())) {
+        seenUrls.add(h.request.url.trim());
+        if (!query || h.request.url.toLowerCase().includes(query)) {
+          list.push({
+            type: 'history',
+            text: h.request.url.trim(),
+            label: h.request.url.trim(),
+            method: h.request.method || 'GET',
+          });
+        }
+      }
+    }
+
+    // 4. Starter presets if list is small
+    if (list.length < 5) {
+      const presets = [
+        'https://jsonplaceholder.typicode.com/todos/1',
+        'http://localhost:3000/api/',
+        'http://localhost:8000/api/',
+        'https://httpbin.org/get',
+      ];
+      for (const p of presets) {
+        if (!seenUrls.has(p) && (!query || p.toLowerCase().includes(query))) {
+          seenUrls.add(p);
+          list.push({
+            type: 'preset',
+            text: p,
+            label: p,
+          });
+        }
+      }
+    }
+
+    return list.slice(0, 8);
+  }, [req?.url, history, collections, environments, activeEnvironmentId]);
+
+  const selectSuggestion = (s: { text: string; method?: string; type: string }) => {
+    if (s.type === 'env') {
+      if (req.url?.includes('{{')) {
+        const updated = req.url.replace(/\{\{[^}]*$/, s.text);
+        handleUrlChange(updated);
+      } else if (!req.url || req.url.trim() === '') {
+        handleUrlChange(s.text);
+      } else {
+        handleUrlChange(req.url + s.text);
+      }
+    } else {
+      handleUrlChange(s.text);
+      if (s.method) {
+        updateActiveRequest((prev) => ({ ...prev, method: s.method as HttpMethod }));
+      }
+    }
+    setIsUrlSuggestionsOpen(false);
+    setSelectedSuggestionIndex(-1);
   };
 
   // Auto-sync query params into URL string
@@ -177,8 +321,8 @@ export const RequestBuilder: React.FC = () => {
       </div>
 
       {/* URL Execution Bar: Method + URL + Send (Unified Postman-style bar) */}
-      <div className="p-3 border-b border-gray-800 flex items-center space-x-2">
-        <div className="flex flex-1 min-w-0 rounded-md bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-hidden">
+      <div className="p-3 border-b border-gray-800 flex items-center space-x-2 relative" ref={urlContainerRef}>
+        <div className="flex flex-1 min-w-0 rounded-md bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-visible relative">
           <select
             value={req.method}
             onChange={(e) =>
@@ -193,15 +337,43 @@ export const RequestBuilder: React.FC = () => {
             ))}
           </select>
 
-          {/* URL Input */}
+          {/* URL Input with Suggestions */}
           <input
             type="text"
             placeholder="Enter request URL or paste cURL command here..."
             value={req.url}
-            onChange={(e) => handleUrlChange(e.target.value)}
+            onFocus={() => setIsUrlSuggestionsOpen(true)}
+            onChange={(e) => {
+              handleUrlChange(e.target.value);
+              setIsUrlSuggestionsOpen(true);
+              setSelectedSuggestionIndex(-1);
+            }}
             onPaste={handleUrlPaste}
             onKeyDown={(e) => {
+              if (isUrlSuggestionsOpen && urlSuggestions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex((prev) => (prev + 1) % urlSuggestions.length);
+                  return;
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setSelectedSuggestionIndex((prev) => (prev - 1 + urlSuggestions.length) % urlSuggestions.length);
+                  return;
+                }
+                if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                  e.preventDefault();
+                  selectSuggestion(urlSuggestions[selectedSuggestionIndex]);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  setIsUrlSuggestionsOpen(false);
+                  return;
+                }
+              }
+
               if (e.key === 'Enter' && req.url?.trim()) {
+                setIsUrlSuggestionsOpen(false);
                 sendRequest();
               }
             }}
@@ -232,6 +404,65 @@ export const RequestBuilder: React.FC = () => {
             <span className="text-[11px] font-medium hidden sm:inline">cURL</span>
           </button>
         </div>
+
+        {/* URL Auto-Suggestions Dropdown (Postman-style) */}
+        {isUrlSuggestionsOpen && urlSuggestions.length > 0 && (
+          <div className="absolute top-full left-3 right-[92px] mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden divide-y divide-gray-800 max-h-72 overflow-y-auto animate-fadeIn">
+            <div className="px-3 py-1.5 bg-gray-950 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-gray-400 select-none">
+              <span>Suggestions, History & Environment Variables</span>
+              <span className="text-gray-500 font-mono">Use ↑ ↓ and Enter</span>
+            </div>
+            {urlSuggestions.map((s, idx) => {
+              const isSelected = idx === selectedSuggestionIndex;
+              return (
+                <div
+                  key={idx}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    selectSuggestion(s);
+                  }}
+                  className={`px-3 py-2 flex items-center justify-between cursor-pointer text-xs transition-colors ${
+                    isSelected ? 'bg-orange-600/20 text-orange-300 font-medium' : 'hover:bg-gray-800 text-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5 min-w-0">
+                    {s.type === 'env' && <Code className="w-3.5 h-3.5 text-purple-400 shrink-0" />}
+                    {s.type === 'history' && <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
+                    {s.type === 'collection' && <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                    {s.type === 'preset' && <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />}
+
+                    {s.method && (
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono shrink-0 ${
+                          s.method === 'GET'
+                            ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60'
+                            : s.method === 'POST'
+                            ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                            : 'bg-blue-950/80 text-blue-400 border border-blue-800/60'
+                        }`}
+                      >
+                        {s.method}
+                      </span>
+                    )}
+
+                    <div className="truncate">
+                      <span className="font-mono text-gray-200">{s.text}</span>
+                      {s.label && s.label !== s.text && (
+                        <span className="text-gray-500 text-[11px] ml-2">({s.label})</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {s.value && (
+                    <span className="text-[10px] font-mono text-gray-400 max-w-[140px] truncate ml-3 shrink-0">
+                      = {s.value}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Send / Cancel Button */}
         {currentTab.isLoading ? (
@@ -332,29 +563,39 @@ export const RequestBuilder: React.FC = () => {
 
             {req.auth?.type === 'bearer' && (
               <div>
-                <label className="block text-gray-400 mb-1">Token</label>
-                <input
-                  type="text"
-                  placeholder="Bearer token or {{token}}"
-                  value={req.auth.bearer?.token || ''}
-                  onChange={(e) =>
-                    updateActiveRequest((prev) => ({
-                      ...prev,
-                      auth: {
-                        ...prev.auth,
-                        bearer: { token: e.target.value },
-                      },
-                    }))
-                  }
-                  className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 font-mono outline-none"
-                />
+                <label className="block text-gray-400 mb-1 text-xs">Token</label>
+                <div className="relative flex items-center">
+                  <input
+                    type={showBearerToken ? 'text' : 'password'}
+                    placeholder="Bearer token or {{token}}"
+                    value={req.auth.bearer?.token || ''}
+                    onChange={(e) =>
+                      updateActiveRequest((prev) => ({
+                        ...prev,
+                        auth: {
+                          ...prev.auth,
+                          bearer: { token: e.target.value },
+                        },
+                      }))
+                    }
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 font-mono outline-none focus:border-orange-500 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowBearerToken(!showBearerToken)}
+                    className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
+                    title={showBearerToken ? 'Hide token' : 'Show token'}
+                  >
+                    {showBearerToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
             )}
 
             {req.auth?.type === 'basic' && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-gray-400 mb-1">Username</label>
+                  <label className="block text-gray-400 mb-1 text-xs">Username</label>
                   <input
                     type="text"
                     value={req.auth.basic?.username || ''}
@@ -367,25 +608,35 @@ export const RequestBuilder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Password</label>
-                  <input
-                    type="password"
-                    value={req.auth.basic?.password || ''}
-                    onChange={(e) =>
-                      updateActiveRequest((prev) => ({
-                        ...prev,
-                        auth: {
-                          ...prev.auth,
-                          basic: { username: prev.auth.basic?.username || '', password: e.target.value },
-                        },
-                      }))
-                    }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
-                  />
+                  <label className="block text-gray-400 mb-1 text-xs">Password</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showBasicPassword ? 'text' : 'password'}
+                      value={req.auth.basic?.password || ''}
+                      onChange={(e) =>
+                        updateActiveRequest((prev) => ({
+                          ...prev,
+                          auth: {
+                            ...prev.auth,
+                            basic: { username: prev.auth.basic?.username || '', password: e.target.value },
+                          },
+                        }))
+                      }
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 outline-none text-xs focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowBasicPassword(!showBasicPassword)}
+                      className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
+                      title={showBasicPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showBasicPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -393,7 +644,7 @@ export const RequestBuilder: React.FC = () => {
             {req.auth?.type === 'apikey' && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-gray-400 mb-1">Key</label>
+                  <label className="block text-gray-400 mb-1 text-xs">Key</label>
                   <input
                     type="text"
                     placeholder="X-API-Key"
@@ -411,33 +662,43 @@ export const RequestBuilder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Value</label>
-                  <input
-                    type="text"
-                    placeholder="api_key_secret_value"
-                    value={req.auth.apiKey?.value || ''}
-                    onChange={(e) =>
-                      updateActiveRequest((prev) => ({
-                        ...prev,
-                        auth: {
-                          ...prev.auth,
-                          apiKey: {
-                            key: prev.auth.apiKey?.key || '',
-                            value: e.target.value,
-                            addTo: prev.auth.apiKey?.addTo || 'header',
+                  <label className="block text-gray-400 mb-1 text-xs">Value</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      placeholder="api_key_secret_value"
+                      value={req.auth.apiKey?.value || ''}
+                      onChange={(e) =>
+                        updateActiveRequest((prev) => ({
+                          ...prev,
+                          auth: {
+                            ...prev.auth,
+                            apiKey: {
+                              key: prev.auth.apiKey?.key || '',
+                              value: e.target.value,
+                              addTo: prev.auth.apiKey?.addTo || 'header',
+                            },
                           },
-                        },
-                      }))
-                    }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 font-mono outline-none"
-                  />
+                        }))
+                      }
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 font-mono outline-none text-xs focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
+                      title={showApiKey ? 'Hide API key' : 'Show API key'}
+                    >
+                      {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Add To</label>
+                  <label className="block text-gray-400 mb-1 text-xs">Add To</label>
                   <select
                     value={req.auth.apiKey?.addTo || 'header'}
                     onChange={(e) =>
@@ -453,7 +714,7 @@ export const RequestBuilder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-gray-200 outline-none"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-gray-200 outline-none text-xs"
                   >
                     <option value="header">Header</option>
                     <option value="query">Query Params</option>
@@ -465,7 +726,7 @@ export const RequestBuilder: React.FC = () => {
             {req.auth?.type === 'oauth2' && (
               <div className="space-y-3">
                 <div>
-                  <label className="block text-gray-400 mb-1">Token URL</label>
+                  <label className="block text-gray-400 mb-1 text-xs">Token URL</label>
                   <input
                     type="text"
                     placeholder="https://auth.company.com/oauth/token"
@@ -483,11 +744,11 @@ export const RequestBuilder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Client ID</label>
+                  <label className="block text-gray-400 mb-1 text-xs">Client ID</label>
                   <input
                     type="text"
                     value={req.auth.oauth2?.clientId || ''}
@@ -500,25 +761,35 @@ export const RequestBuilder: React.FC = () => {
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
+                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-400 mb-1">Client Secret</label>
-                  <input
-                    type="password"
-                    value={req.auth.oauth2?.clientSecret || ''}
-                    onChange={(e) =>
-                      updateActiveRequest((prev) => ({
-                        ...prev,
-                        auth: {
-                          ...prev.auth,
-                          oauth2: { ...prev.auth.oauth2!, clientSecret: e.target.value },
-                        },
-                      }))
-                    }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none"
-                  />
+                  <label className="block text-gray-400 mb-1 text-xs">Client Secret</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showClientSecret ? 'text' : 'password'}
+                      value={req.auth.oauth2?.clientSecret || ''}
+                      onChange={(e) =>
+                        updateActiveRequest((prev) => ({
+                          ...prev,
+                          auth: {
+                            ...prev.auth,
+                            oauth2: { ...prev.auth.oauth2!, clientSecret: e.target.value },
+                          },
+                        }))
+                      }
+                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 outline-none text-xs focus:border-orange-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowClientSecret(!showClientSecret)}
+                      className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
+                      title={showClientSecret ? 'Hide secret' : 'Show secret'}
+                    >
+                      {showClientSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-gray-400 mb-1">Scope (Optional)</label>

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../../store/useAppStore.js';
-import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { Copy, Download, Search, Check, Clock, HardDrive, Info, CheckCircle2, XCircle, FileText, X, ChevronUp, ChevronDown, Radio } from 'lucide-react';
 import { JsonViewer, highlightMatch } from './JsonViewer.js';
 
 function formatBytes(bytes: number): string {
@@ -28,11 +28,26 @@ export const ResponseViewer: React.FC = () => {
     setActiveMatchIndex((prev) => (prev - 1 + totalMatches) % totalMatches);
   };
 
-  const { tabs, activeTabId } = useAppStore();
+  const { tabs, activeTabId, cancelRequest } = useAppStore();
   const currentTab = tabs.find((t) => t.id === activeTabId);
+  const isLoading = !!currentTab?.isLoading;
   const response = currentTab?.response;
   const testResults = currentTab?.testResults;
   const scriptLogs = currentTab?.scriptLogs;
+
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setElapsedTime(0);
+      return;
+    }
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setElapsedTime(parseFloat(((Date.now() - start) / 1000).toFixed(2)));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   const passedTestsCount = testResults?.filter((t) => t.passed).length || 0;
   const totalTestsCount = testResults?.length || 0;
@@ -53,6 +68,48 @@ export const ResponseViewer: React.FC = () => {
       return 0;
     }
   }, [searchTerm, response?.body]);
+
+  // 1. In-flight Request Loader
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-gray-950 select-none animate-fadeIn">
+        {/* Animated Radar Pulse / Spinner */}
+        <div className="relative mb-5 flex items-center justify-center">
+          <div className="absolute w-20 h-20 rounded-full bg-orange-500/15 animate-ping" />
+          <div className="absolute w-14 h-14 rounded-full bg-orange-500/25 animate-pulse" />
+          <div className="w-12 h-12 rounded-full border-2 border-orange-500 border-t-transparent animate-spin flex items-center justify-center bg-gray-900 shadow-lg shadow-orange-500/20">
+            <Radio className="w-5 h-5 text-orange-400" />
+          </div>
+        </div>
+
+        {/* Status Text & Live Timer */}
+        <h3 className="text-sm font-semibold text-gray-200 tracking-wide mb-1 flex items-center space-x-2">
+          <span>Sending request...</span>
+          <span className="font-mono text-orange-400 bg-orange-950/60 border border-orange-800/80 px-2 py-0.5 rounded text-xs font-bold">
+            {elapsedTime.toFixed(2)} s
+          </span>
+        </h3>
+
+        {/* URL in flight */}
+        {currentTab?.request?.url && (
+          <div className="flex items-center space-x-2 text-xs text-gray-400 font-mono max-w-md truncate bg-gray-900/90 border border-gray-800 px-3 py-1.5 rounded-full my-3">
+            <span className="text-orange-400 font-bold">{currentTab.request.method}</span>
+            <span className="truncate text-gray-300">{currentTab.request.url}</span>
+          </div>
+        )}
+
+        {/* Cancel Button right inside response pane */}
+        <button
+          onClick={() => cancelRequest(currentTab?.id)}
+          className="flex items-center space-x-1.5 mt-2 px-4 py-1.5 text-xs font-medium text-rose-300 hover:text-white bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/80 rounded-md transition-all shadow-sm"
+          title="Cancel in-flight request"
+        >
+          <X className="w-3.5 h-3.5" />
+          <span>Cancel Request</span>
+        </button>
+      </div>
+    );
+  }
 
   if (!response) {
     return (
