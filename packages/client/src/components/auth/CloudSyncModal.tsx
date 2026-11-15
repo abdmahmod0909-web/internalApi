@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  ExternalLink,
 } from 'lucide-react';
 
 export const CloudSyncModal: React.FC = () => {
@@ -66,9 +65,9 @@ export const CloudSyncModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-lg bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-lg bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden text-gray-100 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-950/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-950/60 shrink-0">
           <div className="flex items-center space-x-2.5">
             <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
               <Cloud className="w-4 h-4" />
@@ -91,11 +90,11 @@ export const CloudSyncModal: React.FC = () => {
           {/* Server URL Input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="font-medium text-gray-300 flex items-center space-x-1.5">
+              <label className="font-medium text-gray-200 flex items-center space-x-1.5">
                 <Server className="w-3.5 h-3.5 text-orange-400" />
                 <span>Cloud Server Host URL</span>
               </label>
-              <span className="text-[10px] text-gray-500">
+              <span className="text-[10px] text-gray-400">
                 {serverUrl ? 'Connected to Remote' : 'Using Local Server'}
               </span>
             </div>
@@ -105,11 +104,11 @@ export const CloudSyncModal: React.FC = () => {
                 value={inputUrl}
                 onChange={(e) => setInputUrl(e.target.value)}
                 placeholder="e.g. https://api.mycompany.com or http://192.168.1.100:3001"
-                className="flex-1 px-3 py-2 bg-gray-950 border border-gray-800 rounded-md text-gray-200 placeholder-gray-600 focus:outline-none focus:border-orange-500 font-mono text-xs"
+                className="flex-1 px-3 py-2 bg-gray-950 border border-gray-800 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:border-orange-500 font-mono text-xs shadow-inner"
               />
               <button
                 onClick={handleSaveUrl}
-                className="px-3 py-2 bg-gray-800 hover:bg-gray-750 text-gray-200 rounded-md font-medium border border-gray-700 transition-colors"
+                className="px-3.5 py-2 bg-gray-800 hover:bg-gray-750 text-gray-100 rounded-md font-medium border border-gray-700 transition-colors shadow-xs"
               >
                 Save
               </button>
@@ -134,7 +133,7 @@ export const CloudSyncModal: React.FC = () => {
                     setServerUrl('');
                     setTestResult({ success: true, message: 'Reset to local desktop server.' });
                   }}
-                  className="text-gray-500 hover:text-gray-300 text-[11px]"
+                  className="text-gray-400 hover:text-gray-200 text-[11px]"
                 >
                   Reset to Local
                 </button>
@@ -161,12 +160,12 @@ export const CloudSyncModal: React.FC = () => {
           )}
 
           {/* Cloud Sync Actions */}
-          <div className="p-4 bg-gray-950/70 border border-gray-800 rounded-lg space-y-3">
+          <div className="p-4 bg-gray-950/60 border border-gray-800 rounded-lg space-y-3">
             <div className="font-semibold text-gray-200 flex items-center space-x-1.5">
               <Cloud className="w-3.5 h-3.5 text-orange-400" />
               <span>Workspace Synchronization</span>
             </div>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-gray-400 leading-relaxed">
               Synchronize your collections, folders, and environment configurations between your local desktop client and team server.
             </p>
 
@@ -174,7 +173,7 @@ export const CloudSyncModal: React.FC = () => {
               <button
                 onClick={syncLocalToCloudAction}
                 disabled={syncStatus === 'syncing'}
-                className="flex items-center justify-center space-x-2 py-2 px-3 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-md text-gray-200 hover:text-white transition-colors"
+                className="flex items-center justify-center space-x-2 py-2 px-3 bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-md text-gray-100 hover:text-white transition-colors shadow-xs"
               >
                 <UploadCloud className="w-3.5 h-3.5 text-orange-400" />
                 <span className="font-medium">Upload to Cloud</span>
@@ -183,7 +182,7 @@ export const CloudSyncModal: React.FC = () => {
               <button
                 onClick={syncCloudToLocalAction}
                 disabled={syncStatus === 'syncing'}
-                className="flex items-center justify-center space-x-2 py-2 px-3 bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-md text-gray-200 hover:text-white transition-colors"
+                className="flex items-center justify-center space-x-2 py-2 px-3 bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-md text-gray-100 hover:text-white transition-colors shadow-xs"
               >
                 <DownloadCloud className="w-3.5 h-3.5 text-blue-400" />
                 <span className="font-medium">Download from Cloud</span>
@@ -191,7 +190,7 @@ export const CloudSyncModal: React.FC = () => {
             </div>
 
             {syncMessage && (
-              <div className="text-[11px] text-gray-400 pt-1 flex items-center space-x-1.5 font-mono">
+              <div className="text-[11px] text-gray-300 pt-1 flex items-center space-x-1.5 font-mono">
                 {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin text-orange-400" />}
                 {syncStatus === 'synced' && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
                 {syncStatus === 'error' && <AlertCircle className="w-3 h-3 text-rose-400" />}

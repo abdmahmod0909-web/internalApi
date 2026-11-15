@@ -4,4 +4,5 @@ export * from './curl-parser.js';
 export * from './curl-generator.js';
 export * from './script-runner.js';
 export * from './postman-importer.js';
+export * from './postman-exporter.js';
 

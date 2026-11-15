@@ -19,8 +19,10 @@ import {
   PanelLeftOpen,
   Workflow,
   Sparkles,
+  Download,
 } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
+import { downloadCollectionAsJson } from '../utils/export-collection.js';
 
 function getMethodColor(method: HttpMethod | string): string {
   switch (method) {
@@ -452,6 +454,16 @@ export const Sidebar: React.FC = () => {
                           title="Add request to this collection"
                         >
                           <FilePlus className="w-3.5 h-3.5 text-emerald-400" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadCollectionAsJson(col);
+                          }}
+                          className="p-1 hover:text-emerald-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                          title={`Export "${col.name}" as Postman Collection (.json)`}
+                        >
+                          <Download className="w-3 h-3" />
                         </button>
                         <button
                           onClick={(e) => {

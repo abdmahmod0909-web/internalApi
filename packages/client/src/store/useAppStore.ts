@@ -17,6 +17,7 @@ import type {
   UserRole,
 } from '@internalapi/shared';
 import { executeScript, interpolateVariables } from '@internalapi/shared';
+import { downloadCollectionAsJson } from '../utils/export-collection.js';
 
 export interface TabItem {
   id: string;
@@ -120,6 +121,9 @@ interface AppState {
   setCommandPaletteOpen: (open: boolean) => void;
   setEnvModalOpen: (open: boolean) => void;
   setImportModalOpen: (open: boolean) => void;
+  isExportModalOpen: boolean;
+  setExportModalOpen: (open: boolean) => void;
+  exportCollectionAction: (collectionId: string) => void;
   setWorkspaceModalOpen: (open: boolean) => void;
   setTheme: (theme: 'dark' | 'midnight' | 'light') => void;
   setSplitRatio: (ratio: number) => void;
@@ -512,6 +516,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
   setEnvModalOpen: (open) => set({ isEnvModalOpen: open }),
   setImportModalOpen: (open) => set({ isImportModalOpen: open }),
+  isExportModalOpen: false,
+  setExportModalOpen: (open) => set({ isExportModalOpen: open }),
+  exportCollectionAction: (collectionId) => {
+    const col = get().collections.find((c) => c.id === collectionId);
+    if (col) {
+      downloadCollectionAsJson(col);
+    }
+  },
   setWorkspaceModalOpen: (open) => set({ isWorkspaceModalOpen: open }),
   setActiveView: (view) => set({ activeView: view }),
   setActiveFlowId: (id) => set({ activeFlowId: id, activeView: id ? 'flows' : get().activeView }),

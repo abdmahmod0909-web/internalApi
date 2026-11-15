@@ -25,6 +25,9 @@ import {
   Users,
   Shield,
   User as UserIcon,
+  Download,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -42,6 +45,7 @@ export const Navbar: React.FC = () => {
     setEnvModalOpen,
     setCommandPaletteOpen,
     setImportModalOpen,
+    setExportModalOpen,
     theme,
     setTheme,
     sendRequest,
@@ -291,54 +295,67 @@ export const Navbar: React.FC = () => {
           </button>
         </div>
 
-        {/* Import Collection / cURL Button */}
-        <button
-          onClick={() => setImportModalOpen(true)}
-          className="flex items-center space-x-1.5 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
-          title="Import Postman Collection v2.1 or cURL"
-        >
-          <Upload className="w-3.5 h-3.5 text-orange-500" />
-          <span className="hidden sm:inline">Import</span>
-        </button>
-
-        {/* Theme Selector */}
-        <div className="flex items-center bg-gray-900 border border-gray-800 rounded px-1.5 py-0.5" title="Switch Theme">
-          <Palette className="w-3.5 h-3.5 text-gray-400 mr-1" />
-          <select
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as any)}
-            className="bg-transparent text-xs text-gray-300 py-1 outline-none cursor-pointer"
+        {/* Grouped Import & Export Actions */}
+        <div className="flex items-center bg-gray-900 border border-gray-800 rounded-md p-0.5 shadow-xs">
+          <button
+            onClick={() => setImportModalOpen(true)}
+            className="flex items-center space-x-1 px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors"
+            title="Import Postman Collection v2.1 or cURL"
           >
-            <option value="dark" className="bg-gray-900 text-gray-200">Dark</option>
-            <option value="midnight" className="bg-gray-900 text-gray-200">Midnight</option>
-            <option value="light" className="bg-white text-gray-800">Light</option>
-          </select>
+            <Upload className="w-3.5 h-3.5 text-orange-400" />
+            <span className="hidden xl:inline">Import</span>
+          </button>
+          <div className="w-[1px] h-3 bg-gray-800 my-auto" />
+          <button
+            onClick={() => setExportModalOpen(true)}
+            className="flex items-center space-x-1 px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-gray-800 rounded transition-colors"
+            title="Export Collections to Postman v2.1 JSON"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden xl:inline">Export</span>
+          </button>
         </div>
+
+        {/* 1-Click Sleek Theme Toggle */}
+        <button
+          onClick={() => {
+            const nextTheme = theme === 'dark' ? 'midnight' : theme === 'midnight' ? 'light' : 'dark';
+            setTheme(nextTheme);
+          }}
+          className="p-1.5 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-md transition-colors"
+          title={`Theme: ${theme.toUpperCase()} (Click to toggle Dark / Midnight / Light)`}
+        >
+          {theme === 'light' ? (
+            <Sun className="w-3.5 h-3.5 text-amber-500" />
+          ) : theme === 'midnight' ? (
+            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+          ) : (
+            <Moon className="w-3.5 h-3.5 text-blue-400" />
+          )}
+        </button>
 
         {/* Open in Web Browser Button */}
         <a
           href="http://127.0.0.1:39281/"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center space-x-1 px-2.5 py-1 text-xs text-gray-300 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded transition-colors"
+          className="p-1.5 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-md transition-colors"
           title="Open InternalAPI in your web browser (Chrome, Safari, Edge, Firefox)"
         >
           <Globe className="w-3.5 h-3.5 text-orange-400" />
-          <span className="hidden md:inline">Browser</span>
         </a>
 
         {/* Cloud Sync & Remote Server Status Button */}
         <button
           onClick={() => setCloudSettingsOpen(true)}
-          className={`flex items-center space-x-1 px-2.5 py-1 text-xs rounded border transition-colors ${
+          className={`p-1.5 rounded-md border transition-colors ${
             serverUrl
               ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
               : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
           }`}
-          title={serverUrl ? `Linked to cloud server: ${serverUrl}` : 'Running on local server. Click to configure cloud sync.'}
+          title={serverUrl ? `Linked to cloud: ${serverUrl}` : 'Running on local server. Click to configure cloud sync.'}
         >
           <Cloud className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">{serverUrl ? 'Cloud' : 'Local'}</span>
         </button>
 
         {/* User Account / Sign In Pill & Dropdown */}

@@ -10,6 +10,7 @@ import { EnvironmentModal } from './components/environments/EnvironmentModal.js'
 import { WorkspaceModal } from './components/workspaces/WorkspaceModal.js';
 import { CommandPalette } from './components/common/CommandPalette.js';
 import { ImportModal } from './components/common/ImportModal.js';
+import { ExportModal } from './components/common/ExportModal.js';
 import { OtaModal } from './components/common/OtaModal.js';
 import { LoginModal } from './components/auth/LoginModal.js';
 import { TeamModal } from './components/auth/TeamModal.js';
@@ -192,6 +193,7 @@ export const App: React.FC = () => {
       <EnvironmentModal />
       <CommandPalette />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} />
+      <ExportModal />
       <OtaModal />
       <LoginModal />
       <TeamModal />

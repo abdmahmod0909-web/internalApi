@@ -95,10 +95,15 @@ html.theme-light .bg-gray-700 {
 }
 
 /* Semi-transparent surface backgrounds */
+html.theme-light .bg-gray-950\/40,
 html.theme-light .bg-gray-950\/50,
+html.theme-light .bg-gray-950\/60,
+html.theme-light .bg-gray-950\/70,
 html.theme-light .bg-gray-950\/80,
 html.theme-light .bg-gray-950\/90 {
-  background-color: rgba(248, 250, 252, 0.92) !important;
+  background-color: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 html.theme-light .bg-gray-900\/40,
@@ -106,7 +111,9 @@ html.theme-light .bg-gray-900\/50,
 html.theme-light .bg-gray-900\/60,
 html.theme-light .bg-gray-900\/70,
 html.theme-light .bg-gray-900\/80 {
-  background-color: rgba(241, 245, 249, 0.8) !important;
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 html.theme-light .bg-gray-850\/40,
@@ -279,6 +286,11 @@ html.theme-light input[type="checkbox"] {
 html.theme-light input[type="checkbox"]:checked {
   background-color: #ea580c !important;
   border-color: #ea580c !important;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--accent-color);
 }
 
 /* 8. HTTP Method Badges (High Contrast Light Mode) */
