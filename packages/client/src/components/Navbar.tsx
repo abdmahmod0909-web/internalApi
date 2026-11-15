@@ -221,7 +221,7 @@ export const Navbar: React.FC = () => {
             }`}
           >
             <Radio className="w-3 h-3 text-orange-400" />
-            <span>API Client</span>
+            <span>API</span>
           </button>
           <button
             onClick={() => setActiveView('flows')}
