@@ -1,6 +1,6 @@
 {
   "name": "internalapi-root",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "InternalAPI - Enterprise Self-Hosted API Client",
   "workspaces": [

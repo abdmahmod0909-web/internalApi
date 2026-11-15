@@ -4,11 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag to attach hot update to (e.g. v1.0.2)'
-        required: true
+        description: 'Release Tag to attach hot update to (e.g. v1.2.0)'
+        required: false
         type: string
-        default: 'v1.0.2'
+        default: ''
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
@@ -45,6 +47,20 @@ jobs:
           echo "Created ui-bundle.tar.gz successfully:"
           ls -lh ui-bundle.tar.gz
 
+      - name: Determine Version Tag
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            TAG="v${VERSION}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Resolved release tag: ${TAG}"
+
       - name: Upload UI Bundle Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -55,8 +71,11 @@ jobs:
       - name: Publish Hot Push to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: Release ${{ steps.vars.outputs.tag }}
           files: ui-bundle.tar.gz
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
