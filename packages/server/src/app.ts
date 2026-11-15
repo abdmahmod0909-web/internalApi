@@ -4,11 +4,12 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import fastifyJwt from '@fastify/jwt';
 import path from 'node:path';
 import fs from 'node:fs';
 import { interpolateDeep } from '@internalapi/shared';
 import type { ApiRequestData } from '@internalapi/shared';
-import { db } from './storage/db.js';
+import { db, verifyPassword } from './storage/db.js';
 import {
   testDatabaseConnection,
   getRemoteCollections,
@@ -52,6 +53,38 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     limits: {
       fileSize: 30 * 1024 * 1024, // 30MB
     },
+  });
+
+  // Seed default initial admin account if users table is empty
+  db.seedDefaultAdmin();
+
+  // JWT Authentication Setup
+  const jwtSecret = process.env.JWT_SECRET || 'internalapi-jwt-secret-key-change-this-in-production-random-64-chars';
+  app.register(fastifyJwt, {
+    secret: jwtSecret,
+    sign: {
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    },
+  });
+
+  app.decorate('authenticate', async (request: any, reply: any) => {
+    try {
+      await request.jwtVerify();
+    } catch (err) {
+      reply.status(401).send({ error: 'Unauthorized: Invalid or missing token' });
+    }
+  });
+
+  app.decorate('requireAdmin', async (request: any, reply: any) => {
+    try {
+      await request.jwtVerify();
+      const user = request.user;
+      if (user?.role !== 'admin') {
+        reply.status(403).send({ error: 'Forbidden: Admin access required' });
+      }
+    } catch (err) {
+      reply.status(401).send({ error: 'Unauthorized: Invalid or missing token' });
+    }
   });
 
   // Serve static client build if present (Smart OTA & Bundled version resolution)
@@ -118,6 +151,111 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       timestamp: new Date().toISOString(),
       memory: process.memoryUsage(),
     };
+  });
+
+  // =========================================================================
+  // Auth & Team Management (Login-Only, No Public Registration)
+  // =========================================================================
+
+  // Login only (public)
+  app.post('/api/auth/login', async (req) => {
+    const body = req.body as { email?: string; password?: string };
+    if (!body?.email || !body?.password) {
+      throw app.httpErrors.badRequest('Email and password are required');
+    }
+
+    const user = db.getUserByEmail(body.email);
+    if (!user) {
+      throw app.httpErrors.unauthorized('Invalid email or password');
+    }
+
+    const isValid = verifyPassword(body.password, user.passwordHash, user.salt);
+    if (!isValid) {
+      throw app.httpErrors.unauthorized('Invalid email or password');
+    }
+
+    if (!user.isActive) {
+      throw app.httpErrors.forbidden('Account is deactivated. Please contact your administrator.');
+    }
+
+    const token = app.jwt.sign({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    });
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      },
+    };
+  });
+
+  // Get current logged-in profile
+  app.get('/api/auth/me', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const decoded = (req as any).user;
+    const user = db.getUserById(decoded.id);
+    if (!user) {
+      throw app.httpErrors.notFound('User not found');
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+    };
+  });
+
+  // Team Management: List Users (Authenticated)
+  app.get('/api/users', { onRequest: [(app as any).authenticate] }, async () => {
+    return db.getUsers();
+  });
+
+  // Team Management: Create User (Admin only)
+  app.post('/api/users', { onRequest: [(app as any).requireAdmin] }, async (req) => {
+    const body = req.body as { email?: string; name?: string; password?: string; role?: 'admin' | 'editor' | 'viewer' };
+    if (!body?.email || !body?.name || !body?.password) {
+      throw app.httpErrors.badRequest('Email, name, and password are required');
+    }
+    if (body.password.length < 6) {
+      throw app.httpErrors.badRequest('Password must be at least 6 characters long');
+    }
+
+    try {
+      const created = db.createUser({
+        email: body.email,
+        name: body.name,
+        password: body.password,
+        role: body.role || 'editor',
+      });
+      return created;
+    } catch (err: any) {
+      throw app.httpErrors.badRequest(err.message || 'Failed to create user');
+    }
+  });
+
+  // Team Management: Delete User (Admin only)
+  app.delete('/api/users/:id', { onRequest: [(app as any).requireAdmin] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const requester = (req as any).user;
+    if (requester?.id === id) {
+      throw app.httpErrors.badRequest('You cannot delete your own account');
+    }
+
+    const success = db.deleteUser(id);
+    if (!success) {
+      throw app.httpErrors.notFound('User not found');
+    }
+    return { success: true };
   });
 
   // Workspaces

@@ -18,6 +18,13 @@ import {
   Radio,
   Globe,
   Sparkles,
+  LogIn,
+  LogOut,
+  Cloud,
+  CloudOff,
+  Users,
+  Shield,
+  User as UserIcon,
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -44,11 +51,20 @@ export const Navbar: React.FC = () => {
     flows,
     otaInfo,
     setOtaModalOpen,
+    currentUser,
+    serverUrl,
+    setLoginModalOpen,
+    setTeamModalOpen,
+    setCloudSettingsOpen,
+    logoutAction,
   } = useAppStore();
 
   const [isWsDropdownOpen, setIsWsDropdownOpen] = useState(false);
   const [wsSearch, setWsSearch] = useState('');
   const wsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const currentWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || {
@@ -62,12 +78,15 @@ export const Navbar: React.FC = () => {
       if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) {
         setIsWsDropdownOpen(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
     };
-    if (isWsDropdownOpen) {
+    if (isWsDropdownOpen || isUserMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isWsDropdownOpen]);
+  }, [isWsDropdownOpen, isUserMenuOpen]);
 
   const filteredWorkspaces = workspaces.filter((w) =>
     w.name.toLowerCase().includes(wsSearch.toLowerCase())
@@ -307,6 +326,111 @@ export const Navbar: React.FC = () => {
           <Globe className="w-3.5 h-3.5 text-orange-400" />
           <span className="hidden md:inline">Browser</span>
         </a>
+
+        {/* Cloud Sync & Remote Server Status Button */}
+        <button
+          onClick={() => setCloudSettingsOpen(true)}
+          className={`flex items-center space-x-1 px-2.5 py-1 text-xs rounded border transition-colors ${
+            serverUrl
+              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400 hover:bg-blue-500/20'
+              : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
+          }`}
+          title={serverUrl ? `Linked to cloud server: ${serverUrl}` : 'Running on local server. Click to configure cloud sync.'}
+        >
+          <Cloud className="w-3.5 h-3.5" />
+          <span className="hidden lg:inline">{serverUrl ? 'Cloud' : 'Local'}</span>
+        </button>
+
+        {/* User Account / Sign In Pill & Dropdown */}
+        {currentUser ? (
+          <div className="relative" ref={userMenuRef}>
+            <button
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className="flex items-center space-x-2 pl-1 pr-2.5 py-1 text-xs bg-gray-900 hover:bg-gray-850 border border-gray-800 rounded-md transition-colors"
+              title={`Logged in as ${currentUser.name} (${currentUser.role})`}
+            >
+              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 text-white flex items-center justify-center font-bold text-[9px]">
+                {currentUser.name
+                  ? currentUser.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+                  : 'U'}
+              </div>
+              <span className="max-w-[100px] truncate text-gray-200 font-medium">
+                {currentUser.name}
+              </span>
+              <span
+                className={`text-[9px] px-1.5 py-0.2 rounded-full uppercase font-mono font-semibold ${
+                  currentUser.role === 'admin'
+                    ? 'bg-purple-500/20 text-purple-300'
+                    : 'bg-blue-500/20 text-blue-300'
+                }`}
+              >
+                {currentUser.role}
+              </span>
+              <ChevronDown className="w-3 h-3 text-gray-500" />
+            </button>
+
+            {isUserMenuOpen && (
+              <div className="absolute right-0 mt-1.5 w-56 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl py-1 z-50 text-xs text-gray-200 animate-in fade-in duration-100">
+                <div className="px-3 py-2 border-b border-gray-800">
+                  <div className="font-semibold text-white truncate">{currentUser.name}</div>
+                  <div className="text-[11px] text-gray-400 font-mono truncate">{currentUser.email}</div>
+                  <div className="mt-1 flex items-center space-x-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span className="text-[10px] text-emerald-400 font-medium capitalize">
+                      {currentUser.role} Account
+                    </span>
+                  </div>
+                </div>
+
+                {currentUser.role === 'admin' && (
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setTeamModalOpen(true);
+                    }}
+                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-800 text-orange-400 hover:text-orange-300 transition-colors"
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Team Accounts</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setCloudSettingsOpen(true);
+                  }}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-800 text-gray-300 hover:text-white transition-colors"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Cloud Server Settings</span>
+                </button>
+
+                <div className="border-t border-gray-800 my-1" />
+
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    logoutAction();
+                  }}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-rose-500/10 text-rose-400 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setLoginModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1 text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white rounded transition-colors shadow-xs"
+            title="Sign in with your team credentials"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Sign In</span>
+          </button>
+        )}
       </div>
     </header>
   );

@@ -210,6 +210,46 @@
       "status": 0,
       "size": 0,
       "time": 0,
+      "id": "hist-65d36971-a13a-4fad-a72d-9e3647eb7bae",
+      "createdAt": "2026-11-15T07:06:05.511Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-a69bfb29-d731-4aa1-93f3-400067f67998",
+      "createdAt": "2026-11-15T07:02:45.968Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-ecdc5665-4606-4bf8-974a-0290c2b8365d",
+      "createdAt": "2026-11-15T06:58:33.288Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-0ff3b344-1437-49f3-8008-d2466b702137",
+      "createdAt": "2026-11-15T06:56:26.926Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
       "id": "hist-545abcf7-66df-415d-8d68-4f8e7714ead8",
       "createdAt": "2026-11-04T11:44:49.291Z"
     },
@@ -834,5 +874,17 @@
       "createdAt": "2026-10-29T20:09:35.482Z"
     }
   ],
-  "flows": []
+  "flows": [],
+  "users": [
+    {
+      "id": "usr-admin-4d7a10d2-1a13-44b2-a556-7b3db191d274",
+      "email": "admin@internalapi.local",
+      "name": "InternalAPI Admin",
+      "passwordHash": "f5f216dbdb029d4c08018a9b87f9039be84c9d3053c9d3f9360d98a78659c652c6e92e9996089661c3d3d3819c95d7dc49c4b3937dc201b71649b51591856819",
+      "salt": "613dc0631e42f9de6cf40e57305cba50",
+      "role": "admin",
+      "isActive": true,
+      "createdAt": "2026-11-15T06:58:33.168Z"
+    }
+  ]
 }

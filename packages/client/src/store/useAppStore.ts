@@ -13,6 +13,8 @@ import type {
   FlowNodeType,
   FlowExecutionReport,
   FlowStepLog,
+  User,
+  UserRole,
 } from '@internalapi/shared';
 import { executeScript, interpolateVariables } from '@internalapi/shared';
 
@@ -91,6 +93,29 @@ interface AppState {
   applyOtaUpdateAction: () => Promise<boolean>;
   revertOtaAction: () => Promise<void>;
 
+  // User Authentication & Cloud Sync
+  currentUser: User | null;
+  authToken: string | null;
+  serverUrl: string;
+  isLoginModalOpen: boolean;
+  isTeamModalOpen: boolean;
+  isCloudSettingsOpen: boolean;
+  teamUsers: User[];
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  syncMessage: string;
+
+  setServerUrl: (url: string) => void;
+  setLoginModalOpen: (open: boolean) => void;
+  setTeamModalOpen: (open: boolean) => void;
+  setCloudSettingsOpen: (open: boolean) => void;
+  loginAction: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string }>;
+  logoutAction: () => void;
+  fetchTeamUsersAction: () => Promise<void>;
+  createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole }) => Promise<{ success: boolean; error?: string }>;
+  deleteTeamUserAction: (id: string) => Promise<{ success: boolean; error?: string }>;
+  syncLocalToCloudAction: () => Promise<{ success: boolean; message: string }>;
+  syncCloudToLocalAction: () => Promise<{ success: boolean; message: string }>;
+
   // Actions
   setCommandPaletteOpen: (open: boolean) => void;
   setEnvModalOpen: (open: boolean) => void;
@@ -155,6 +180,42 @@ function setStoredItem(key: string, value: string): void {
       window.localStorage.setItem(key, value);
     }
   } catch {}
+}
+
+export function getApiBaseUrl(): string {
+  const custom = getStoredItem('internalapi_server_url', '');
+  if (custom && custom.trim()) {
+    return custom.trim().replace(/\/+$/, '');
+  }
+  return '';
+}
+
+export function getAuthToken(): string {
+  return getStoredItem('internalapi_auth_token', '');
+}
+
+export function getInitialUser(): User | null {
+  const saved = getStoredItem('internalapi_user', '');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {}
+  }
+  return null;
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = baseUrl ? `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}` : endpoint;
+  const token = getAuthToken();
+  const headers = new Headers(options.headers || {});
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(fullUrl, {
+    ...options,
+    headers,
+  });
 }
 
 function getInitialTabs(): TabItem[] {
@@ -247,6 +308,163 @@ export const useAppStore = create<AppState>((set, get) => ({
   isApplyingOta: false,
   setOtaModalOpen: (open) => set({ isOtaModalOpen: open }),
 
+  // User Authentication & Cloud Sync
+  currentUser: getInitialUser(),
+  authToken: getAuthToken() || null,
+  serverUrl: getApiBaseUrl(),
+  isLoginModalOpen: false,
+  isTeamModalOpen: false,
+  isCloudSettingsOpen: false,
+  teamUsers: [],
+  syncStatus: 'idle',
+  syncMessage: '',
+
+  setServerUrl: (url: string) => {
+    const clean = url.trim().replace(/\/+$/, '');
+    setStoredItem('internalapi_server_url', clean);
+    set({ serverUrl: clean });
+  },
+  setLoginModalOpen: (open: boolean) => set({ isLoginModalOpen: open }),
+  setTeamModalOpen: (open: boolean) => set({ isTeamModalOpen: open }),
+  setCloudSettingsOpen: (open: boolean) => set({ isCloudSettingsOpen: open }),
+
+  loginAction: async (email, password, customServerUrl) => {
+    try {
+      const targetBase = customServerUrl !== undefined
+        ? customServerUrl.trim().replace(/\/+$/, '')
+        : get().serverUrl.trim().replace(/\/+$/, '');
+
+      if (customServerUrl !== undefined) {
+        set({ serverUrl: targetBase });
+        setStoredItem('internalapi_server_url', targetBase);
+      }
+
+      const url = targetBase ? `${targetBase}/api/auth/login` : '/api/auth/login';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Login failed' };
+      }
+
+      const { token, user } = data;
+      setStoredItem('internalapi_auth_token', token);
+      setStoredItem('internalapi_user', JSON.stringify(user));
+      set({
+        currentUser: user,
+        authToken: token,
+        isLoginModalOpen: false,
+      });
+
+      // Reload workspaces, collections, environments from server
+      await get().loadInitialData();
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error connecting to server' };
+    }
+  },
+
+  logoutAction: () => {
+    setStoredItem('internalapi_auth_token', '');
+    setStoredItem('internalapi_user', '');
+    set({
+      currentUser: null,
+      authToken: null,
+      teamUsers: [],
+    });
+  },
+
+  fetchTeamUsersAction: async () => {
+    try {
+      const res = await apiFetch('/api/users');
+      if (res.ok) {
+        const users = await res.json();
+        if (Array.isArray(users)) {
+          set({ teamUsers: users });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch team users:', e);
+    }
+  },
+
+  createTeamUserAction: async (userData) => {
+    try {
+      const res = await apiFetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to create user' };
+      }
+      await get().fetchTeamUsersAction();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error creating user' };
+    }
+  },
+
+  deleteTeamUserAction: async (id) => {
+    try {
+      const res = await apiFetch(`/api/users/${id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to delete user' };
+      }
+      await get().fetchTeamUsersAction();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error deleting user' };
+    }
+  },
+
+  syncLocalToCloudAction: async () => {
+    set({ syncStatus: 'syncing', syncMessage: 'Uploading collections to cloud...' });
+    try {
+      const { collections, environments } = get();
+      for (const col of collections) {
+        await apiFetch('/api/collections', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(col),
+        });
+      }
+      for (const env of environments) {
+        await apiFetch('/api/environments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(env),
+        });
+      }
+      set({ syncStatus: 'synced', syncMessage: 'Successfully synced local data to cloud!' });
+      return { success: true, message: `Synced ${collections.length} collections and ${environments.length} environments to cloud.` };
+    } catch (err: any) {
+      set({ syncStatus: 'error', syncMessage: err.message || 'Sync failed' });
+      return { success: false, message: err.message || 'Sync failed' };
+    }
+  },
+
+  syncCloudToLocalAction: async () => {
+    set({ syncStatus: 'syncing', syncMessage: 'Downloading collections from cloud...' });
+    try {
+      await get().loadInitialData();
+      set({ syncStatus: 'synced', syncMessage: 'Local workspace updated from cloud!' });
+      return { success: true, message: 'Successfully updated local workspace from cloud.' };
+    } catch (err: any) {
+      set({ syncStatus: 'error', syncMessage: err.message || 'Sync failed' });
+      return { success: false, message: err.message || 'Sync failed' };
+    }
+  },
+
   checkOtaUpdates: async () => {
     try {
       const res = await fetch('/api/ota/check');
@@ -317,11 +535,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const activeWs = get().activeWorkspaceId;
       const [wsRes, envRes, colRes, histRes, flowRes] = await Promise.all([
-        fetch('/api/workspaces').then((r) => r.json()).catch(() => []),
-        fetch(`/api/environments?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        fetch(`/api/collections?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        fetch(`/api/history?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        fetch(`/api/flows?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        apiFetch('/api/workspaces').then((r) => r.json()).catch(() => []),
+        apiFetch(`/api/environments?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        apiFetch(`/api/collections?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        apiFetch(`/api/history?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+        apiFetch(`/api/flows?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
       ]);
 
       const workspaces = Array.isArray(wsRes) ? wsRes : [];
@@ -362,7 +580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeWorkspaceId, activeEnvironmentId } = get();
     const envParam = activeEnvironmentId ? `&environmentId=${activeEnvironmentId}` : '';
     try {
-      const res = await fetch(`/api/collections?workspaceId=${activeWorkspaceId}${envParam}`).then((r) => r.json());
+      const res = await apiFetch(`/api/collections?workspaceId=${activeWorkspaceId}${envParam}`).then((r) => r.json());
       if (Array.isArray(res)) {
         set({ collections: res });
         setStoredItem('internalapi_collections', JSON.stringify(res));
@@ -559,7 +777,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     try {
-      const res = await fetch('/api/proxy/send', {
+      const res = await apiFetch('/api/proxy/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -725,7 +943,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // Save to backend
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedCol),
@@ -743,7 +961,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveEnvironment: async (env) => {
-    const res = await fetch('/api/environments', {
+    const res = await apiFetch('/api/environments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(env),
@@ -765,7 +983,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteEnvironment: async (id) => {
-    await fetch(`/api/environments/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/environments/${id}`, { method: 'DELETE' });
     const next = get().environments.filter((e) => e.id !== id);
     set({
       environments: next,
@@ -785,7 +1003,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       requests: [],
     };
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newCol),
@@ -798,7 +1016,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   deleteCollection: async (id) => {
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    await fetch(`/api/collections/${id}${envParam}`, { method: 'DELETE' });
+    await apiFetch(`/api/collections/${id}${envParam}`, { method: 'DELETE' });
     const next = get().collections.filter((c) => c.id !== id);
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
@@ -809,7 +1027,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!col) return;
     const updated = { ...col, name };
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -835,7 +1053,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       folders: [...(col.folders || []), newFolder],
     };
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -854,7 +1072,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       folders: (col.folders || []).map((f) => (f.id === folderId ? { ...f, name } : f)),
     };
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -873,7 +1091,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       folders: (col.folders || []).filter((f) => f.id !== folderId),
     };
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -903,7 +1121,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       updated.requests = [...(updated.requests || []), newReq];
     }
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -927,7 +1145,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       updated.requests = (updated.requests || []).filter((r) => r.id !== requestId);
     }
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -957,7 +1175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       );
     }
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
-    const res = await fetch(`/api/collections${envParam}`, {
+    const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updated),
@@ -977,7 +1195,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   refreshHistory: async () => {
     const { activeWorkspaceId } = get();
-    const res = await fetch(`/api/history?workspaceId=${activeWorkspaceId}`).then((r) => r.json());
+    const res = await apiFetch(`/api/history?workspaceId=${activeWorkspaceId}`).then((r) => r.json());
     if (Array.isArray(res)) {
       set({ history: res });
     }
@@ -985,14 +1203,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearHistory: async () => {
     const { activeWorkspaceId } = get();
-    await fetch(`/api/history?workspaceId=${activeWorkspaceId}`, { method: 'DELETE' });
+    await apiFetch(`/api/history?workspaceId=${activeWorkspaceId}`, { method: 'DELETE' });
     set({ history: [] });
   },
 
   // Workspace Actions
   createWorkspace: async (name: string, description?: string) => {
     try {
-      const res = await fetch('/api/workspaces', {
+      const res = await apiFetch('/api/workspaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description }),
@@ -1025,7 +1243,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   deleteWorkspace: async (workspaceId: string) => {
     try {
-      await fetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });
+      await apiFetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });
       const remaining = get().workspaces.filter((w) => w.id !== workspaceId);
       const nextActive = remaining[0]?.id || 'ws-default-company';
       set({ workspaces: remaining, activeWorkspaceId: nextActive, activeFlowId: null });
@@ -1042,7 +1260,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadFlows: async () => {
     const { activeWorkspaceId } = get();
     try {
-      const res = await fetch(`/api/flows?workspaceId=${activeWorkspaceId}`).then((r) => r.json());
+      const res = await apiFetch(`/api/flows?workspaceId=${activeWorkspaceId}`).then((r) => r.json());
       if (Array.isArray(res)) {
         set({ flows: res });
         if (get().activeFlowId && !res.some((f) => f.id === get().activeFlowId)) {
@@ -1217,7 +1435,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
 
     try {
-      const res = await fetch('/api/flows', {
+      const res = await apiFetch('/api/flows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newFlow),
@@ -1236,7 +1454,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   saveFlow: async (flow: Flow) => {
     try {
-      const res = await fetch('/api/flows', {
+      const res = await apiFetch('/api/flows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(flow),
@@ -1252,7 +1470,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   deleteFlow: async (id: string) => {
     try {
-      await fetch(`/api/flows/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/flows/${id}`, { method: 'DELETE' });
       set((state) => ({
         flows: state.flows.filter((f) => f.id !== id),
         activeFlowId: state.activeFlowId === id ? null : state.activeFlowId,
@@ -1369,7 +1587,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             settings: { timeoutMs: 30000, followRedirects: true, verifySsl: true },
           };
 
-          const res = await fetch('/api/proxy/send', {
+          const res = await apiFetch('/api/proxy/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

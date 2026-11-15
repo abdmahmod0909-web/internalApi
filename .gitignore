@@ -15,5 +15,7 @@ coverage
 *-darwin-x64
 *-linux-x64
 *.exe
+client_dist
+packages/server/client_dist
 
 

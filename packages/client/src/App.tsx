@@ -11,6 +11,9 @@ import { WorkspaceModal } from './components/workspaces/WorkspaceModal.js';
 import { CommandPalette } from './components/common/CommandPalette.js';
 import { ImportModal } from './components/common/ImportModal.js';
 import { OtaModal } from './components/common/OtaModal.js';
+import { LoginModal } from './components/auth/LoginModal.js';
+import { TeamModal } from './components/auth/TeamModal.js';
+import { CloudSyncModal } from './components/auth/CloudSyncModal.js';
 import { GripVertical, GripHorizontal } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -190,6 +193,9 @@ export const App: React.FC = () => {
       <CommandPalette />
       <ImportModal isOpen={isImportModalOpen} onClose={() => setImportModalOpen(false)} />
       <OtaModal />
+      <LoginModal />
+      <TeamModal />
+      <CloudSyncModal />
     </div>
   );
 };

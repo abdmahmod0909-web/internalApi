@@ -153,4 +153,136 @@ describe('Fastify Server Integration Tests', () => {
     expect(response).toHaveProperty('headers');
     expect(response).toHaveProperty('body');
   });
+
+  describe('Authentication & Team Management (Login-Only)', () => {
+    let adminToken: string;
+    let createdUserId: string;
+
+    it('rejects login with wrong credentials', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'admin@internalapi.local',
+          password: 'wrongpassword',
+        },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('logs in successfully with default admin credentials', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'admin@internalapi.local',
+          password: 'admin123456',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(data).toHaveProperty('token');
+      expect(data.user.email).toBe('admin@internalapi.local');
+      expect(data.user.role).toBe('admin');
+      adminToken = data.token;
+    });
+
+    it('fetches current user profile via /api/auth/me', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/auth/me',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const user = JSON.parse(res.payload);
+      expect(user.email).toBe('admin@internalapi.local');
+      expect(user.role).toBe('admin');
+    });
+
+    it('allows admin to create a new team member account', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/users',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+        },
+        payload: {
+          email: 'developer@internalapi.local',
+          name: 'Team Developer',
+          password: 'developer123',
+          role: 'editor',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const user = JSON.parse(res.payload);
+      expect(user.email).toBe('developer@internalapi.local');
+      expect(user.role).toBe('editor');
+      expect(user.passwordHash).toBeUndefined();
+      createdUserId = user.id;
+    });
+
+    it('allows the newly created team member to log in', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'developer@internalapi.local',
+          password: 'developer123',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = JSON.parse(res.payload);
+      expect(data.user.email).toBe('developer@internalapi.local');
+      expect(data.user.role).toBe('editor');
+
+      // Verify that editor cannot create other users (requiresAdmin)
+      const forbiddenRes = await app.inject({
+        method: 'POST',
+        url: '/api/users',
+        headers: {
+          authorization: `Bearer ${data.token}`,
+        },
+        payload: {
+          email: 'another@test.local',
+          name: 'Another',
+          password: 'pass',
+        },
+      });
+      expect(forbiddenRes.statusCode).toBe(403);
+    });
+
+    it('lists team members for authenticated users', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/users',
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const users = JSON.parse(res.payload);
+      expect(Array.isArray(users)).toBe(true);
+      expect(users.some((u: any) => u.email === 'developer@internalapi.local')).toBe(true);
+    });
+
+    it('allows admin to delete the team member account', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/users/${createdUserId}`,
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.payload).success).toBe(true);
+    });
+  });
 });

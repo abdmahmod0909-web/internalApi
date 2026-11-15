@@ -12,7 +12,33 @@ import type {
 } from '@internalapi/shared';
 import { encryptSecret, decryptSecret } from '../crypto/encryption.js';
 
+export interface StoredUser {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  salt: string;
+  role: 'admin' | 'editor' | 'viewer';
+  isActive: boolean;
+  createdAt: string;
+}
+
+export function hashPassword(password: string, salt = crypto.randomBytes(16).toString('hex')): { hash: string; salt: string } {
+  const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+  return { hash, salt };
+}
+
+export function verifyPassword(password: string, hash: string, salt: string): boolean {
+  try {
+    const check = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(check, 'hex'), Buffer.from(hash, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
 export interface StorageData {
+  users?: StoredUser[];
   workspaces: Workspace[];
   collections: Collection[];
   environments: Environment[];
@@ -80,6 +106,7 @@ function getDataFilePath(): { dataDir: string; dataFile: string } {
 const { dataDir: DATA_DIR, dataFile: DATA_FILE } = getDataFilePath();
 
 const INITIAL_DEMO_DATA: StorageData = {
+  users: [],
   workspaces: [
     {
       id: DEFAULT_WORKSPACE_ID,
@@ -218,6 +245,9 @@ class LocalFileStorage {
         }
         if (!Array.isArray(parsed.flows)) {
           parsed.flows = [];
+        }
+        if (!Array.isArray(parsed.users)) {
+          parsed.users = [];
         }
         return parsed;
       }
@@ -455,6 +485,85 @@ class LocalFileStorage {
   clearHistory(workspaceId: string) {
     this.data.history = this.data.history.filter((h) => h.workspaceId !== workspaceId);
     this.saveData(this.data);
+  }
+
+  // Users (Admin-managed, Login-only)
+  getUsers(): Array<Omit<StoredUser, 'passwordHash' | 'salt'>> {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    return this.data.users.map(({ passwordHash, salt, ...user }) => user);
+  }
+
+  getUserByEmail(email: string): StoredUser | undefined {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const normalized = email.trim().toLowerCase();
+    return this.data.users.find((u) => u.email.toLowerCase() === normalized);
+  }
+
+  getUserById(id: string): StoredUser | undefined {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    return this.data.users.find((u) => u.id === id);
+  }
+
+  createUser(params: {
+    email: string;
+    name: string;
+    password: string;
+    role?: 'admin' | 'editor' | 'viewer';
+  }): Omit<StoredUser, 'passwordHash' | 'salt'> {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const normalizedEmail = params.email.trim().toLowerCase();
+    if (this.data.users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+      throw new Error(`User with email "${params.email}" already exists`);
+    }
+
+    const { hash, salt } = hashPassword(params.password);
+    const newUser: StoredUser = {
+      id: `usr-${crypto.randomUUID()}`,
+      email: normalizedEmail,
+      name: params.name.trim(),
+      passwordHash: hash,
+      salt,
+      role: params.role || 'editor',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.data.users.push(newUser);
+    this.saveData(this.data);
+
+    const { passwordHash: _, salt: __, ...sanitized } = newUser;
+    return sanitized;
+  }
+
+  deleteUser(id: string): boolean {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const prevLen = this.data.users.length;
+    this.data.users = this.data.users.filter((u) => u.id !== id);
+    this.saveData(this.data);
+    return this.data.users.length < prevLen;
+  }
+
+  seedDefaultAdmin(
+    email = process.env.ADMIN_EMAIL || 'admin@internalapi.local',
+    password = process.env.ADMIN_PASSWORD || 'admin123456',
+    name = process.env.ADMIN_NAME || 'InternalAPI Admin'
+  ): void {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    if (this.data.users.length === 0) {
+      const { hash, salt } = hashPassword(password);
+      const adminUser: StoredUser = {
+        id: `usr-admin-${crypto.randomUUID()}`,
+        email: email.trim().toLowerCase(),
+        name: name.trim(),
+        passwordHash: hash,
+        salt,
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      this.data.users.push(adminUser);
+      this.saveData(this.data);
+    }
   }
 }
 

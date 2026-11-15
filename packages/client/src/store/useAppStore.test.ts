@@ -44,5 +44,41 @@ describe('Client Zustand Store', () => {
     expect(activeTab?.isLoading).toBe(false);
     expect(activeTab?.response).toBeUndefined();
   });
+
+  it('manages serverUrl and cloud settings state', () => {
+    const store = useAppStore.getState();
+    store.setServerUrl('https://api.mycompany.com/');
+    expect(useAppStore.getState().serverUrl).toBe('https://api.mycompany.com');
+
+    store.setLoginModalOpen(true);
+    expect(useAppStore.getState().isLoginModalOpen).toBe(true);
+
+    store.setTeamModalOpen(true);
+    expect(useAppStore.getState().isTeamModalOpen).toBe(true);
+
+    store.setCloudSettingsOpen(true);
+    expect(useAppStore.getState().isCloudSettingsOpen).toBe(true);
+  });
+
+  it('handles logoutAction cleanly', () => {
+    const store = useAppStore.getState();
+    // Simulate active session
+    useAppStore.setState({
+      currentUser: {
+        id: 'usr-1',
+        email: 'admin@company.com',
+        name: 'Admin',
+        role: 'admin',
+        isActive: true,
+        createdAt: '2026-01-01',
+      },
+      authToken: 'mock-jwt-token',
+    });
+
+    expect(useAppStore.getState().currentUser).not.toBeNull();
+    store.logoutAction();
+    expect(useAppStore.getState().currentUser).toBeNull();
+    expect(useAppStore.getState().authToken).toBeNull();
+  });
 });
 
