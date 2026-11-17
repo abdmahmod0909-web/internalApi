@@ -203,7 +203,7 @@ export const Navbar: React.FC = () => {
                   className="w-full flex items-center space-x-1.5 px-2.5 py-1.5 text-left rounded text-orange-400 hover:bg-orange-500/10 hover:text-orange-300 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span className="font-medium text-xs">Create Workspace</span>
+                  <span className="font-medium text-xs">Add Workspace</span>
                 </button>
               </div>
             </div>
