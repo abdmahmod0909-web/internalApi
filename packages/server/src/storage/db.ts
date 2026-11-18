@@ -694,6 +694,51 @@ class LocalFileStorage {
     return this.data.users.length < prevLen;
   }
 
+  resetUserPassword(userId: string, newPassword: string): boolean {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const user = this.data.users.find((u) => u.id === userId);
+    if (!user) return false;
+    const { hash, salt } = hashPassword(newPassword);
+    user.passwordHash = hash;
+    user.salt = salt;
+    this.saveData(this.data);
+    return true;
+  }
+
+  updateUserProfile(
+    userId: string,
+    updates: { name?: string; oldPassword?: string; newPassword?: string }
+  ): { success: boolean; error?: string; user?: Omit<StoredUser, 'passwordHash' | 'salt'> } {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const user = this.data.users.find((u) => u.id === userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (updates.name && updates.name.trim()) {
+      user.name = updates.name.trim();
+    }
+
+    if (updates.newPassword) {
+      if (!updates.oldPassword) {
+        return { success: false, error: 'Current password is required to change password' };
+      }
+      if (!verifyPassword(updates.oldPassword, user.passwordHash, user.salt)) {
+        return { success: false, error: 'Current password is incorrect' };
+      }
+      if (updates.newPassword.length < 6) {
+        return { success: false, error: 'New password must be at least 6 characters long' };
+      }
+      const { hash, salt } = hashPassword(updates.newPassword);
+      user.passwordHash = hash;
+      user.salt = salt;
+    }
+
+    this.saveData(this.data);
+    const { passwordHash: _, salt: __, ...sanitized } = user;
+    return { success: true, user: sanitized };
+  }
+
   seedDefaultAdmin(
     email = process.env.ADMIN_EMAIL || 'admin@internalapi.local',
     password = process.env.ADMIN_PASSWORD || 'admin123456',

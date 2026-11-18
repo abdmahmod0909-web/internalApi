@@ -1,5 +1,12 @@
 {
-  "workspaces": [],
+  "workspaces": [
+    {
+      "id": "ws-default-company",
+      "name": "Company Internal APIs",
+      "description": "Default company workspace for internal and microservice testing",
+      "isDefault": true
+    }
+  ],
   "environments": [
     {
       "id": "env-development",

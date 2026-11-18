@@ -215,8 +215,33 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     };
   });
 
-  // Team Management: List Users (Authenticated)
-  app.get('/api/users', { onRequest: [(app as any).authenticate] }, async () => {
+  // Update current user profile & change password (requires old password)
+  app.patch('/api/auth/profile', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const requester = (req as any).user;
+    const body = req.body as { name?: string; oldPassword?: string; newPassword?: string };
+
+    const result = db.updateUserProfile(requester.id, body);
+    if (!result.success) {
+      throw app.httpErrors.badRequest(result.error || 'Failed to update profile');
+    }
+
+    const updatedUser = result.user!;
+    const newToken = app.jwt.sign({
+      id: updatedUser.id,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role,
+    });
+
+    return {
+      success: true,
+      token: newToken,
+      user: updatedUser,
+    };
+  });
+
+  // Team Management: List Users (Admin only)
+  app.get('/api/users', { onRequest: [(app as any).requireAdmin] }, async () => {
     return db.getUsers();
   });
 
@@ -256,6 +281,21 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       throw app.httpErrors.notFound('User not found');
     }
     return { success: true };
+  });
+
+  // Team Management: Admin Reset User Password (Admin only)
+  app.post('/api/users/:id/reset-password', { onRequest: [(app as any).requireAdmin] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as { newPassword?: string };
+    if (!body?.newPassword || body.newPassword.length < 6) {
+      throw app.httpErrors.badRequest('New password must be at least 6 characters long');
+    }
+
+    const success = db.resetUserPassword(id, body.newPassword);
+    if (!success) {
+      throw app.httpErrors.notFound('User not found');
+    }
+    return { success: true, message: 'Password reset successfully' };
   });
 
   // Workspaces (Protected: login required)

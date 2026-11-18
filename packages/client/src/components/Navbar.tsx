@@ -59,6 +59,7 @@ export const Navbar: React.FC = () => {
     serverUrl,
     setLoginModalOpen,
     setTeamModalOpen,
+    setProfileModalOpen,
     setCloudSettingsOpen,
     logoutAction,
   } = useAppStore();
@@ -399,16 +400,29 @@ export const Navbar: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Profile Settings (All users) */}
+                <button
+                  onClick={() => {
+                    setIsUserMenuOpen(false);
+                    setProfileModalOpen(true);
+                  }}
+                  className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-800 text-gray-300 hover:text-white transition-colors"
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Profile Settings</span>
+                </button>
+
+                {/* User Management (Admin only) */}
                 {currentUser.role === 'admin' && (
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);
                       setTeamModalOpen(true);
                     }}
-                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-800 text-orange-400 hover:text-orange-300 transition-colors"
+                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-800 text-purple-400 hover:text-purple-300 transition-colors"
                   >
                     <Users className="w-3.5 h-3.5" />
-                    <span>Team Accounts</span>
+                    <span>User Management (Admin)</span>
                   </button>
                 )}
 

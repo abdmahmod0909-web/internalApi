@@ -14,6 +14,7 @@ import { ExportModal } from './components/common/ExportModal.js';
 import { OtaModal } from './components/common/OtaModal.js';
 import { LoginModal } from './components/auth/LoginModal.js';
 import { TeamModal } from './components/auth/TeamModal.js';
+import { ProfileModal } from './components/auth/ProfileModal.js';
 import { CloudSyncModal } from './components/auth/CloudSyncModal.js';
 import { GripVertical, GripHorizontal } from 'lucide-react';
 
@@ -230,6 +231,7 @@ export const App: React.FC = () => {
       <OtaModal />
       <LoginModal />
       <TeamModal />
+      <ProfileModal />
       <CloudSyncModal />
     </div>
   );

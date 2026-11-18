@@ -100,6 +100,7 @@ interface AppState {
   serverUrl: string;
   isLoginModalOpen: boolean;
   isTeamModalOpen: boolean;
+  isProfileModalOpen: boolean;
   isCloudSettingsOpen: boolean;
   teamUsers: User[];
   syncStatus: 'idle' | 'syncing' | 'synced' | 'error';
@@ -108,12 +109,15 @@ interface AppState {
   setServerUrl: (url: string) => void;
   setLoginModalOpen: (open: boolean) => void;
   setTeamModalOpen: (open: boolean) => void;
+  setProfileModalOpen: (open: boolean) => void;
   setCloudSettingsOpen: (open: boolean) => void;
   loginAction: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string }>;
   logoutAction: () => void;
   fetchTeamUsersAction: () => Promise<void>;
   createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole }) => Promise<{ success: boolean; error?: string }>;
   deleteTeamUserAction: (id: string) => Promise<{ success: boolean; error?: string }>;
+  adminResetPasswordAction: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfileAction: (params: { name?: string; oldPassword?: string; newPassword?: string }) => Promise<{ success: boolean; error?: string }>;
   syncLocalToCloudAction: () => Promise<{ success: boolean; message: string }>;
   syncCloudToLocalAction: () => Promise<{ success: boolean; message: string }>;
 
@@ -333,6 +337,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoginModalOpen: false,
   isTeamModalOpen: false,
   isCloudSettingsOpen: false,
+  isProfileModalOpen: false,
   teamUsers: [],
   syncStatus: 'idle',
   syncMessage: '',
@@ -344,6 +349,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setLoginModalOpen: (open: boolean) => set({ isLoginModalOpen: open }),
   setTeamModalOpen: (open: boolean) => set({ isTeamModalOpen: open }),
+  setProfileModalOpen: (open: boolean) => set({ isProfileModalOpen: open }),
   setCloudSettingsOpen: (open: boolean) => set({ isCloudSettingsOpen: open }),
 
   loginAction: async (email, password, customServerUrl) => {
@@ -450,6 +456,48 @@ export const useAppStore = create<AppState>((set, get) => ({
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Network error deleting user' };
+    }
+  },
+
+  adminResetPasswordAction: async (userId, newPassword) => {
+    try {
+      const res = await apiFetch(`/api/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to reset password' };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error resetting password' };
+    }
+  },
+
+  updateProfileAction: async (params) => {
+    try {
+      const res = await apiFetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to update profile' };
+      }
+      if (data.token) {
+        setStoredItem('internalapi_auth_token', data.token);
+        set({ authToken: data.token });
+      }
+      if (data.user) {
+        setStoredItem('internalapi_user', JSON.stringify(data.user));
+        set({ currentUser: data.user });
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error updating profile' };
     }
   },
 
