@@ -20,6 +20,7 @@ import {
   Workflow,
   Sparkles,
   Download,
+  Lock,
 } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
@@ -87,6 +88,8 @@ export const Sidebar: React.FC = () => {
     deleteFlow,
     activeView,
     setActiveView,
+    currentUser,
+    setLoginModalOpen,
   } = useAppStore();
 
   useEffect(() => {
@@ -326,7 +329,27 @@ export const Sidebar: React.FC = () => {
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {activeTab === 'collections' && (
+        {!currentUser ? (
+          <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 mt-12 animate-in fade-in duration-200">
+            <div className="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400 shadow-inner">
+              <Lock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-gray-200">Sign In Required</h3>
+              <p className="text-[11px] text-gray-400 mt-1 max-w-[200px] leading-relaxed">
+                Collections and API requests are private to authenticated team members.
+              </p>
+            </div>
+            <button
+              onClick={() => setLoginModalOpen(true)}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-medium transition-all shadow-md shadow-orange-950/40 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Sign In to View
+            </button>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'collections' && (
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
               <span>Collections ({collections.length})</span>
@@ -984,6 +1007,8 @@ export const Sidebar: React.FC = () => {
               ))
             )}
           </div>
+        )}
+          </>
         )}
       </div>
     </aside>

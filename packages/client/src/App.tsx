@@ -19,6 +19,8 @@ import { GripVertical, GripHorizontal } from 'lucide-react';
 
 export const App: React.FC = () => {
   const {
+    currentUser,
+    loadCollections,
     loadInitialData,
     sendRequest,
     saveCurrentRequest,
@@ -61,6 +63,37 @@ export const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Real-time synchronization across browser tabs and automatic background refresh
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      channel = new BroadcastChannel('internalapi_sync');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'sync_collections') {
+          loadCollections();
+        }
+      };
+    }
+
+    // Background sync every 10 seconds to pull team updates in real time
+    const interval = setInterval(() => {
+      loadCollections();
+    }, 10000);
+
+    const handleFocus = () => {
+      loadCollections();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+      channel?.close();
+    };
+  }, [currentUser]);
 
   // Resizable split divider drag handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

@@ -258,55 +258,33 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     return { success: true };
   });
 
-  // Workspaces
-  app.get('/api/workspaces', async () => {
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL('/data/workspaces', process.env.DATABASE_API_URL));
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
+  // Workspaces (Protected: login required)
+  app.get('/api/workspaces', { onRequest: [(app as any).authenticate] }, async () => {
     return db.getWorkspaces();
   });
 
-  app.post('/api/workspaces', async (req) => {
+  app.post('/api/workspaces', { onRequest: [(app as any).authenticate] }, async (req) => {
     const body = req.body as { name: string; description?: string };
     if (!body?.name) {
       throw app.httpErrors.badRequest('Workspace name is required');
     }
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL('/data/workspaces', process.env.DATABASE_API_URL), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
     return db.createWorkspace(body.name, body.description);
   });
 
-  app.delete('/api/workspaces/:id', async (req) => {
+  app.delete('/api/workspaces/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
     const { id } = req.params as { id: string };
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL(`/data/workspaces/${id}`, process.env.DATABASE_API_URL), { method: 'DELETE' });
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
     const success = db.deleteWorkspace(id);
     return { success };
   });
 
-  // Flows (Workflows / API Flow Tool)
-  app.get('/api/flows', async (req) => {
+  // Flows (Protected: login required)
+  app.get('/api/flows', { onRequest: [(app as any).authenticate] }, async (req) => {
     const query = req.query as { workspaceId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
     return db.getFlows(wsId);
   });
 
-  app.post('/api/flows', async (req) => {
+  app.post('/api/flows', { onRequest: [(app as any).authenticate] }, async (req) => {
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Flow name is required');
@@ -314,51 +292,29 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     return db.saveFlow(body);
   });
 
-  app.delete('/api/flows/:id', async (req) => {
+  app.delete('/api/flows/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
     const { id } = req.params as { id: string };
     const success = db.deleteFlow(id);
     return { success };
   });
 
-  // Environments
-  app.get('/api/environments', async (req) => {
+  // Environments (Protected: login required)
+  app.get('/api/environments', { onRequest: [(app as any).authenticate] }, async (req) => {
     const query = req.query as { workspaceId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL(`/data/environments?workspaceId=${encodeURIComponent(wsId)}`, process.env.DATABASE_API_URL));
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
     return db.getEnvironments(wsId);
   });
 
-  app.post('/api/environments', async (req) => {
+  app.post('/api/environments', { onRequest: [(app as any).authenticate] }, async (req) => {
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Environment name is required');
     }
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL('/data/environments', process.env.DATABASE_API_URL), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
     return db.saveEnvironment(body);
   });
 
-  app.delete('/api/environments/:id', async (req) => {
+  app.delete('/api/environments/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
     const { id } = req.params as { id: string };
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL(`/data/environments/${id}`, process.env.DATABASE_API_URL), { method: 'DELETE' });
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
     const success = db.deleteEnvironment(id);
     return { success };
   });
@@ -370,8 +326,8 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     return testDatabaseConnection(config);
   });
 
-  // Collections
-  app.get('/api/collections', async (req) => {
+  // Collections (Protected: login required)
+  app.get('/api/collections', { onRequest: [(app as any).authenticate] }, async (req) => {
     const query = req.query as { workspaceId?: string; environmentId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
 
@@ -387,17 +343,10 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       }
     }
 
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL(`/data/collections?workspaceId=${encodeURIComponent(wsId)}`, process.env.DATABASE_API_URL));
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
-
     return db.getCollections(wsId);
   });
 
-  app.post('/api/collections', async (req) => {
+  app.post('/api/collections', { onRequest: [(app as any).authenticate] }, async (req) => {
     const query = req.query as { environmentId?: string };
     const body = req.body as any;
     if (!body?.name) {
@@ -416,20 +365,10 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       }
     }
 
-    if (process.env.DATABASE_API_URL) {
-      try {
-        await fetch(new URL('/data/collections', process.env.DATABASE_API_URL), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(saved),
-        });
-      } catch (_) {}
-    }
-
     return saved;
   });
 
-  app.delete('/api/collections/:id', async (req) => {
+  app.delete('/api/collections/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
     const { id } = req.params as { id: string };
     const query = req.query as { environmentId?: string };
     const success = db.deleteCollection(id);
@@ -448,17 +387,11 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     return { success };
   });
 
-  // History
-  app.get('/api/history', async (req) => {
+  // History (Protected: login required)
+  app.get('/api/history', { onRequest: [(app as any).authenticate] }, async (req) => {
     const query = req.query as { workspaceId?: string; limit?: string };
     const wsId = query.workspaceId || 'ws-default-company';
-    const limit = query.limit ? parseInt(query.limit, 10) : 50;
-    if (process.env.DATABASE_API_URL) {
-      try {
-        const res = await fetch(new URL(`/data/history?workspaceId=${encodeURIComponent(wsId)}&limit=${limit}`, process.env.DATABASE_API_URL));
-        if (res.ok) return await res.json();
-      } catch (_) {}
-    }
+    const limit = query.limit ? parseInt(query.limit, 10) : 30;
     return db.getHistory(wsId, limit);
   });
 
@@ -576,10 +509,18 @@ const defaultApp: FastifyInstance = buildApp();
 // Named export kept so tests / dev.ts can still `import { app }` with types.
 export const app = defaultApp;
 
+let hasInitialSynced = false;
+
 // Vercel Serverless Function entry point
 const handler = async function (req: any, res: any) {
   await defaultApp.ready();
-  await db.syncFromTurso();
+  if (!hasInitialSynced) {
+    hasInitialSynced = true;
+    await db.syncFromTurso();
+  } else {
+    // Non-blocking background sync so requests are never delayed
+    db.syncFromTurso().catch(() => {});
+  }
 
   // Ensure req.url matches Fastify registered routes whether the /api prefix was preserved or stripped
   if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/health')) {

@@ -255,6 +255,8 @@ function getInitialTabs(): TabItem[] {
 }
 
 function getInitialCollections(): Collection[] {
+  const token = getAuthToken();
+  if (!token) return [];
   const saved = getStoredItem('internalapi_collections', '');
   if (saved) {
     try {
@@ -266,6 +268,8 @@ function getInitialCollections(): Collection[] {
 }
 
 function getInitialEnvironments(): Environment[] {
+  const token = getAuthToken();
+  if (!token) return [];
   const saved = getStoredItem('internalapi_environments', '');
   if (saved) {
     try {
@@ -281,6 +285,16 @@ const initialActiveTabId = getStoredItem('internalapi_active_tab_id', initialTab
 
 // In-flight request abort controllers per tab
 const inFlightControllers = new Map<string, AbortController>();
+
+function notifySyncChannel() {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    try {
+      const ch = new BroadcastChannel('internalapi_sync');
+      ch.postMessage({ type: 'sync_collections', timestamp: Date.now() });
+      ch.close();
+    } catch (_) {}
+  }
+}
 
 export const useAppStore = create<AppState>((set, get) => ({
   workspaces: [],
@@ -376,10 +390,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   logoutAction: () => {
     setStoredItem('internalapi_auth_token', '');
     setStoredItem('internalapi_user', '');
+    setStoredItem('internalapi_collections', '');
+    setStoredItem('internalapi_environments', '');
     set({
       currentUser: null,
       authToken: null,
       teamUsers: [],
+      collections: [],
+      workspaces: [],
+      environments: [],
+      history: [],
+      flows: [],
+      isLoginModalOpen: true,
     });
   },
 
@@ -545,6 +567,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadInitialData: async () => {
     try {
+      const token = getAuthToken();
+      if (!token) {
+        set({
+          collections: [],
+          workspaces: [],
+          environments: [],
+          history: [],
+          flows: [],
+          isLoginModalOpen: true,
+        });
+        return;
+      }
+
       const activeWs = get().activeWorkspaceId;
       const [wsRes, envRes, colRes, histRes, flowRes] = await Promise.all([
         apiFetch('/api/workspaces').then((r) => r.json()).catch(() => []),
@@ -1044,6 +1079,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = [...get().collections, saved];
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
+    notifySyncChannel();
   },
 
   deleteCollection: async (id) => {
@@ -1052,6 +1088,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = get().collections.filter((c) => c.id !== id);
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
+    notifySyncChannel();
   },
 
   renameCollection: async (id, name) => {
@@ -1068,6 +1105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const next = get().collections.map((c) => (c.id === id ? saved : c));
     set({ collections: next });
     setStoredItem('internalapi_collections', JSON.stringify(next));
+    notifySyncChannel();
   },
 
   addFolder: async (collectionId, folderName) => {
