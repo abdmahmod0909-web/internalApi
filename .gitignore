@@ -19,3 +19,6 @@ client_dist
 packages/server/client_dist
 
 
+
+.vercel
+.env*
