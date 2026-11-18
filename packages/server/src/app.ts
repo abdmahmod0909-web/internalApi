@@ -572,16 +572,20 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 }
 
 const defaultApp: FastifyInstance = buildApp();
+
+// Named export kept so tests / dev.ts can still `import { app }` with types.
 export const app = defaultApp;
 
-// Vercel Serverless Function entry point (required when framework: fastify loads app.js)
+// Vercel Serverless Function entry point
 const handler = async function (req: any, res: any) {
   await defaultApp.ready();
   await db.syncFromTurso();
-  // Ensure req.url matches Fastify registered routes whether /api prefix was preserved or stripped
-  if (req.url && !req.url.startsWith('/api') && req.url !== '/health' && !req.url.startsWith('/health')) {
+
+  // Ensure req.url matches Fastify registered routes whether the /api prefix was preserved or stripped
+  if (req.url && !req.url.startsWith('/api') && !req.url.startsWith('/health')) {
     req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
   }
+
   return new Promise((resolve, reject) => {
     res.on('finish', () => resolve(true));
     res.on('close', () => resolve(true));
@@ -590,5 +594,12 @@ const handler = async function (req: any, res: any) {
   });
 };
 
-export default Object.assign(handler, defaultApp);
-
+// IMPORTANT: no `export default` here. When compiled to CommonJS, that produces an
+// exports object ({ buildApp, app, default }) which Vercel rejects with
+// "The default export must be a function or server".
+// Instead the handler function itself becomes the module export.
+// (Vercel's `module.exports` interop also exposes it as the default export.)
+module.exports = handler;
+module.exports.default = handler;
+module.exports.buildApp = buildApp;
+module.exports.app = defaultApp;
