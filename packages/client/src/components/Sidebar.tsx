@@ -216,13 +216,13 @@ export const Sidebar: React.FC = () => {
   }, [collections, filterText]);
 
   const filteredHistory = history.filter((item) =>
-    item.url.toLowerCase().includes(filterText.toLowerCase()) ||
-    item.method.toLowerCase().includes(filterText.toLowerCase())
+    (item?.url && item.url.toLowerCase().includes(filterText.toLowerCase())) ||
+    (item?.method && item.method.toLowerCase().includes(filterText.toLowerCase()))
   );
 
   const filteredFlows = flows.filter((flow) =>
-    flow.name.toLowerCase().includes(filterText.toLowerCase()) ||
-    (flow.description && flow.description.toLowerCase().includes(filterText.toLowerCase()))
+    (flow?.name && flow.name.toLowerCase().includes(filterText.toLowerCase())) ||
+    (flow?.description && flow.description.toLowerCase().includes(filterText.toLowerCase()))
   );
 
   // Minimized / Collapsed View (Slim Icon Rail)

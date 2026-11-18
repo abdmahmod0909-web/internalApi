@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import dotenv from 'dotenv';
 import type {
   Workspace,
   Collection,
@@ -11,6 +12,13 @@ import type {
   Flow,
 } from '@internalapi/shared';
 import { encryptSecret, decryptSecret } from '../crypto/encryption.js';
+
+// Ensure environment variables are loaded across all candidate paths
+dotenv.config();
+try {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+  dotenv.config({ path: path.resolve(process.cwd(), '../../.env') });
+} catch (_) {}
 
 export interface StoredUser {
   id: string;
@@ -30,23 +38,7 @@ export function hashPassword(password: string, salt = crypto.randomBytes(16).toS
 
 export function verifyPassword(password: string, hash: string, salt: string): boolean {
   try {
-    // 1. PBKDF2 check (standard)
-    if (salt) {
-      const check = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-      if (check.length === hash.length && crypto.timingSafeEqual(Buffer.from(check, 'hex'), Buffer.from(hash, 'hex'))) {
-        return true;
-      }
-    }
-    // 2. SHA256 check (compatibility with legacy seeds)
-    const sha = crypto.createHash('sha256').update(password).digest('hex');
-    if (sha.toLowerCase() === hash.toLowerCase()) {
-      return true;
-    }
-    const shaWithSalt = crypto.createHash('sha256').update(password + (salt || '')).digest('hex');
-    if (shaWithSalt.toLowerCase() === hash.toLowerCase()) {
-      return true;
-    }
-    // 3. Password matching default admin credentials
+    // 1. Password matching default admin credentials
     if (password === 'admin123456' || password === 'admin') {
       if (
         hash === '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918' ||
@@ -55,6 +47,22 @@ export function verifyPassword(password: string, hash: string, salt: string): bo
       ) {
         return true;
       }
+    }
+    // 2. PBKDF2 check (standard)
+    if (salt) {
+      const check = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+      if (check.length === hash.length && crypto.timingSafeEqual(Buffer.from(check, 'hex'), Buffer.from(hash, 'hex'))) {
+        return true;
+      }
+    }
+    // 3. SHA256 check (compatibility with legacy seeds)
+    const sha = crypto.createHash('sha256').update(password).digest('hex');
+    if (sha.toLowerCase() === hash.toLowerCase()) {
+      return true;
+    }
+    const shaWithSalt = crypto.createHash('sha256').update(password + (salt || '')).digest('hex');
+    if (shaWithSalt.toLowerCase() === hash.toLowerCase()) {
+      return true;
     }
     return false;
   } catch {
@@ -83,7 +91,6 @@ export interface StorageData {
 const DEFAULT_WORKSPACE_ID = 'ws-default-company';
 
 function getDataFilePath(): { dataDir: string; dataFile: string } {
-  // If running on Vercel Serverless Functions, the filesystem outside /tmp is read-only
   if (process.env.VERCEL) {
     const tmpDir = '/tmp';
     const tmpFile = path.join(tmpDir, 'store.json');
@@ -104,43 +111,35 @@ function getDataFilePath(): { dataDir: string; dataFile: string } {
     return { dataDir: tmpDir, dataFile: tmpFile };
   }
 
-  // Check packages/server/.data/store.json first
   const serverPath = path.resolve(process.cwd(), 'packages/server/.data');
   if (fs.existsSync(path.join(serverPath, 'store.json'))) {
     return { dataDir: serverPath, dataFile: path.join(serverPath, 'store.json') };
   }
-  // Check local .data/store.json
   const cwdPath = path.resolve(process.cwd(), '.data');
   if (fs.existsSync(path.join(cwdPath, 'store.json'))) {
     return { dataDir: cwdPath, dataFile: path.join(cwdPath, 'store.json') };
   }
-  // Check __dirname .data/store.json (for packaged desktop app)
   const dirPath = path.resolve(__dirname, '.data');
   if (fs.existsSync(path.join(dirPath, 'store.json'))) {
     return { dataDir: dirPath, dataFile: path.join(dirPath, 'store.json') };
   }
-  // Check parent ../.data/store.json
   const parentPath = path.resolve(process.cwd(), '../.data');
   if (fs.existsSync(path.join(parentPath, 'store.json'))) {
     return { dataDir: parentPath, dataFile: path.join(parentPath, 'store.json') };
   }
 
-  // Default to packages/server/.data or APPDATA on Windows for packaged app
   if (fs.existsSync(path.resolve(process.cwd(), 'packages/server'))) {
     const dir = path.join(process.cwd(), 'packages/server/.data');
     return { dataDir: dir, dataFile: path.join(dir, 'store.json') };
   }
 
   if (process.env.APPDATA) {
-    // Windows: %APPDATA%/InternalAPI/.data
     const appDataDir = path.join(process.env.APPDATA, 'InternalAPI', '.data');
     return { dataDir: appDataDir, dataFile: path.join(appDataDir, 'store.json') };
   } else if (process.platform === 'darwin' && process.env.HOME) {
-    // macOS: ~/Library/Application Support/InternalAPI/.data
     const macDataDir = path.join(process.env.HOME, 'Library', 'Application Support', 'InternalAPI', '.data');
     return { dataDir: macDataDir, dataFile: path.join(macDataDir, 'store.json') };
   } else if (process.env.HOME) {
-    // Linux: ~/.config/InternalAPI/.data
     const linuxDataDir = path.join(process.env.HOME, '.config', 'InternalAPI', '.data');
     return { dataDir: linuxDataDir, dataFile: path.join(linuxDataDir, 'store.json') };
   }
@@ -183,20 +182,6 @@ const INITIAL_DEMO_DATA: StorageData = {
         },
       ],
     },
-    {
-      id: 'env-production',
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      name: 'Production',
-      variables: [
-        {
-          id: 'v3',
-          key: 'base_url',
-          value: 'https://httpbin.org',
-          isSecret: false,
-          isEnabled: true,
-        },
-      ],
-    },
   ],
   collections: [
     {
@@ -231,34 +216,6 @@ const INITIAL_DEMO_DATA: StorageData = {
               },
               bodyType: 'none',
             },
-            {
-              id: 'req-httpbin-post',
-              collectionId: 'col-getting-started',
-              folderId: 'fld-samples',
-              name: 'Sample POST JSON',
-              method: 'POST',
-              url: '{{base_url}}/post',
-              queryParams: [],
-              headers: [
-                { id: 'h2', key: 'Content-Type', value: 'application/json', isEnabled: true },
-              ],
-              auth: {
-                type: 'bearer',
-                bearer: {
-                  token: '{{api_token}}',
-                },
-              },
-              bodyType: 'json',
-              bodyContent: JSON.stringify(
-                {
-                  message: 'Hello from InternalAPI Postman clone!',
-                  service: 'billing-service',
-                  timestamp: new Date().toISOString(),
-                },
-                null,
-                2
-              ),
-            },
           ],
         },
       ],
@@ -268,11 +225,42 @@ const INITIAL_DEMO_DATA: StorageData = {
   history: [],
 };
 
+// ---------------------------------------------------------------------------
+// Turso Pipeline Helpers
+// ---------------------------------------------------------------------------
+
+function formatTursoArg(val: any): { type: string; value?: any } {
+  if (val === null || val === undefined) return { type: 'null' };
+  if (typeof val === 'number') {
+    if (Number.isInteger(val)) return { type: 'integer', value: String(val) };
+    return { type: 'float', value: val };
+  }
+  if (typeof val === 'boolean') return { type: 'integer', value: val ? '1' : '0' };
+  return { type: 'text', value: String(val) };
+}
+
+function parseTursoResult(result: any): any[] {
+  if (!result || result.type !== 'ok' || !result.response?.result) return [];
+  const { cols, rows } = result.response.result;
+  if (!cols || !rows) return [];
+  const colNames = cols.map((c: any) => c.name);
+  return rows.map((row: any[]) => {
+    const obj: any = {};
+    for (let i = 0; i < colNames.length; i++) {
+      const cell = row[i];
+      obj[colNames[i]] = cell ? cell.value : null;
+    }
+    return obj;
+  });
+}
+
 class LocalFileStorage {
   private data: StorageData;
+  private isTursoReady = false;
 
   constructor() {
     this.data = this.loadData();
+    this.seedDefaultAdmin();
   }
 
   private loadData(): StorageData {
@@ -297,48 +285,61 @@ class LocalFileStorage {
         }
         return parsed;
       }
-    } catch (e) {
-      // If error reading, fallback to initial demo
-    }
-    this.saveData(INITIAL_DEMO_DATA);
+    } catch (e) {}
+    this.saveLocalData(INITIAL_DEMO_DATA);
     return INITIAL_DEMO_DATA;
   }
 
-  private saveData(data: StorageData): void {
+  private saveLocalData(data: StorageData): void {
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
-      // ignore in read-only setups
+      // ignore on read-only environments
     }
+  }
 
-    // Direct Turso cloud sync if configured
+  // Turso pipeline executor
+  private async executeTurso(stmts: Array<{ sql: string; args?: any[] }>): Promise<any[]> {
     const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
     const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
-    if (tursoUrl && tursoToken) {
-      const endpoint = `${tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')}/v2/pipeline`;
-      fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${tursoToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: [
-            {
-              type: 'execute',
-              stmt: {
-                sql: `INSERT INTO internalapi_store (id, data, updated_at) VALUES ('main', ?, datetime('now'))
-                      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at;`,
-                args: [{ type: 'text', value: JSON.stringify(data) }],
-              },
-            },
-            { type: 'close' },
-          ],
-        }),
-      }).catch(() => {});
+    if (!tursoUrl || !tursoToken) return [];
+
+    const endpoint = `${tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')}/v2/pipeline`;
+    const requests: any[] = stmts.map((s) => ({
+      type: 'execute',
+      stmt: {
+        sql: s.sql,
+        args: (s.args || []).map(formatTursoArg),
+      },
+    }));
+    requests.push({ type: 'close' });
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tursoToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ requests }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Turso pipeline error HTTP ${res.status}: ${errText}`);
+    }
+
+    const json: any = await res.json();
+    return json.results || [];
+  }
+
+  private async executeTursoBackground(stmts: Array<{ sql: string; args?: any[] }>): Promise<void> {
+    try {
+      await this.executeTurso(stmts);
+    } catch (e) {
+      console.warn('Background Turso write error:', e);
     }
   }
 
@@ -352,50 +353,197 @@ class LocalFileStorage {
     if (!this.syncPromise) {
       this.syncPromise = (async () => {
         try {
-          const endpoint = `${tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')}/v2/pipeline`;
-          const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${tursoToken}`,
-              'Content-Type': 'application/json',
+          // 1. Ensure dedicated relational tables and indexes exist
+          await this.executeTurso([
+            {
+              sql: `CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'editor',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+              );`,
             },
-            body: JSON.stringify({
-              requests: [
-                {
-                  type: 'execute',
-                  stmt: {
-                    sql: `CREATE TABLE IF NOT EXISTS internalapi_store (
-                      id TEXT PRIMARY KEY,
-                      data TEXT NOT NULL,
-                      updated_at TEXT NOT NULL
-                    );`,
-                    args: [],
-                  },
-                },
-                {
-                  type: 'execute',
-                  stmt: {
-                    sql: `SELECT data FROM internalapi_store WHERE id = 'main';`,
-                    args: [],
-                  },
-                },
-                { type: 'close' },
-              ],
-            }),
-          });
-          if (res.ok) {
-            const json: any = await res.json();
-            const row = json.results?.[1]?.response?.result?.rows?.[0]?.[0];
-            if (row && typeof row.value === 'string') {
-              const remoteData = JSON.parse(row.value);
-              if (remoteData?.workspaces && Array.isArray(remoteData.workspaces)) {
-                this.data = remoteData;
-              }
-            } else {
-              this.saveData(this.data);
-            }
+            {
+              sql: `CREATE TABLE IF NOT EXISTS workspaces (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+              );`,
+            },
+            {
+              sql: `CREATE TABLE IF NOT EXISTS collections (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+              );`,
+            },
+            {
+              sql: `CREATE TABLE IF NOT EXISTS environments (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                variables TEXT NOT NULL,
+                db_connection TEXT,
+                updated_at TEXT NOT NULL
+              );`,
+            },
+            {
+              sql: `CREATE TABLE IF NOT EXISTS history (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                url TEXT NOT NULL,
+                status INTEGER NOT NULL,
+                size INTEGER NOT NULL,
+                time REAL NOT NULL,
+                created_at TEXT NOT NULL
+              );`,
+            },
+            {
+              sql: `CREATE TABLE IF NOT EXISTS flows (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+              );`,
+            },
+            { sql: `CREATE INDEX IF NOT EXISTS idx_collections_ws ON collections(workspace_id);` },
+            { sql: `CREATE INDEX IF NOT EXISTS idx_environments_ws ON environments(workspace_id);` },
+            { sql: `CREATE INDEX IF NOT EXISTS idx_history_ws ON history(workspace_id);` },
+            { sql: `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);` },
+          ]);
+
+          // 2. Fetch all rows from dedicated tables
+          const results = await this.executeTurso([
+            { sql: `SELECT * FROM workspaces;` },
+            { sql: `SELECT * FROM users;` },
+            { sql: `SELECT * FROM environments;` },
+            { sql: `SELECT id, workspace_id, name, description, sort_order, data, updated_at FROM collections;` },
+            { sql: `SELECT * FROM flows;` },
+            { sql: `SELECT * FROM history ORDER BY created_at DESC LIMIT 100;` },
+          ]);
+
+          const workspacesRows = parseTursoResult(results[0]);
+          const usersRows = parseTursoResult(results[1]);
+          const environmentsRows = parseTursoResult(results[2]);
+          const collectionsRows = parseTursoResult(results[3]);
+          const flowsRows = parseTursoResult(results[4]);
+          const historyRows = parseTursoResult(results[5]);
+
+          if (workspacesRows.length > 0) {
+            this.data.workspaces = workspacesRows.map((r: any) => ({
+              id: r.id,
+              name: r.name,
+              description: r.description || undefined,
+              isDefault: Boolean(Number(r.is_default)),
+            }));
           }
-        } catch (_) {}
+
+          if (usersRows.length > 0) {
+            this.data.users = usersRows.map((r: any) => ({
+              id: r.id,
+              email: r.email,
+              name: r.name,
+              passwordHash: r.password_hash,
+              salt: r.salt,
+              role: r.role || 'editor',
+              isActive: r.is_active === '1' || r.is_active === 1 || r.is_active === true,
+              createdAt: r.created_at,
+            }));
+          }
+
+          if (environmentsRows.length > 0) {
+            this.data.environments = environmentsRows.map((r: any) => {
+              let vars = [];
+              let dbConn = undefined;
+              try {
+                vars = JSON.parse(r.variables || '[]');
+              } catch (_) {}
+              try {
+                if (r.db_connection) dbConn = JSON.parse(r.db_connection);
+              } catch (_) {}
+              return {
+                id: r.id,
+                workspaceId: r.workspace_id,
+                name: r.name,
+                variables: vars,
+                dbConnection: dbConn,
+                updatedAt: r.updated_at,
+              };
+            });
+          }
+
+          if (collectionsRows.length > 0) {
+            this.data.collections = collectionsRows.map((r: any) => {
+              let extra: any = {};
+              try {
+                extra = JSON.parse(r.data || '{}');
+              } catch (_) {}
+              return {
+                id: r.id,
+                workspaceId: r.workspace_id,
+                name: r.name,
+                description: r.description || undefined,
+                sortOrder: typeof r.sort_order === 'number' ? r.sort_order : parseInt(r.sort_order || '0', 10),
+                folders: extra.folders || [],
+                requests: extra.requests || [],
+                auth: extra.auth,
+                variables: extra.variables,
+              };
+            });
+          }
+
+          if (flowsRows.length > 0) {
+            this.data.flows = flowsRows.map((r: any) => {
+              let extra: any = {};
+              try {
+                extra = JSON.parse(r.data || '{}');
+              } catch (_) {}
+              return {
+                id: r.id,
+                workspaceId: r.workspace_id,
+                name: r.name,
+                description: r.description || undefined,
+                createdAt: r.created_at,
+                updatedAt: r.updated_at,
+                ...extra,
+              };
+            });
+          }
+
+          if (historyRows.length > 0) {
+            this.data.history = historyRows.map((r: any) => ({
+              id: r.id,
+              workspaceId: r.workspace_id,
+              method: r.method,
+              url: r.url,
+              status: Number(r.status),
+              size: Number(r.size),
+              time: Number(r.time),
+              createdAt: r.created_at,
+            }));
+          }
+
+          // Ensure default admin user is seeded both in memory and Turso
+          this.seedDefaultAdmin();
+          this.saveLocalData(this.data);
+          this.isTursoReady = true;
+        } catch (err) {
+          console.warn('Turso sync warning:', err);
+        }
       })();
     }
     await this.syncPromise;
@@ -414,52 +562,34 @@ class LocalFileStorage {
       isDefault: false,
     };
     this.data.workspaces.push(ws);
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO workspaces (id, name, description, is_default, created_at)
+              VALUES (?, ?, ?, 0, datetime('now'));`,
+        args: [ws.id, ws.name, ws.description || null],
+      },
+    ]);
+
     return ws;
   }
 
   deleteWorkspace(id: string): boolean {
     const prevLen = this.data.workspaces.length;
     this.data.workspaces = this.data.workspaces.filter((w) => w.id !== id && !w.isDefault);
-    this.saveData(this.data);
-    return this.data.workspaces.length < prevLen;
-  }
-
-  // Flows
-  getFlows(workspaceId: string): Flow[] {
-    if (!Array.isArray(this.data.flows)) this.data.flows = [];
-    return this.data.flows.filter((f) => f.workspaceId === workspaceId);
-  }
-
-  getFlow(id: string): Flow | undefined {
-    if (!Array.isArray(this.data.flows)) this.data.flows = [];
-    return this.data.flows.find((f) => f.id === id);
-  }
-
-  saveFlow(flow: Flow): Flow {
-    if (!Array.isArray(this.data.flows)) this.data.flows = [];
-    const index = this.data.flows.findIndex((f) => f.id === flow.id);
-    const toSave: Flow = {
-      ...flow,
-      id: flow.id || `flow-${crypto.randomUUID()}`,
-      updatedAt: new Date().toISOString(),
-      createdAt: flow.createdAt || new Date().toISOString(),
-    };
-    if (index >= 0) {
-      this.data.flows[index] = toSave;
-    } else {
-      this.data.flows.push(toSave);
+    if (this.data.workspaces.length < prevLen) {
+      this.saveLocalData(this.data);
+      this.executeTursoBackground([
+        { sql: `DELETE FROM workspaces WHERE id = ?;`, args: [id] },
+        { sql: `DELETE FROM collections WHERE workspace_id = ?;`, args: [id] },
+        { sql: `DELETE FROM environments WHERE workspace_id = ?;`, args: [id] },
+        { sql: `DELETE FROM flows WHERE workspace_id = ?;`, args: [id] },
+        { sql: `DELETE FROM history WHERE workspace_id = ?;`, args: [id] },
+      ]);
+      return true;
     }
-    this.saveData(this.data);
-    return toSave;
-  }
-
-  deleteFlow(id: string): boolean {
-    if (!Array.isArray(this.data.flows)) this.data.flows = [];
-    const prevLen = this.data.flows.length;
-    this.data.flows = this.data.flows.filter((f) => f.id !== id);
-    this.saveData(this.data);
-    return this.data.flows.length < prevLen;
+    return false;
   }
 
   // Collections
@@ -472,22 +602,60 @@ class LocalFileStorage {
   }
 
   saveCollection(col: Collection): Collection {
-    const index = this.data.collections.findIndex((c) => c.id === col.id);
+    const targetId = col.id || `col-${crypto.randomUUID()}`;
+    const toSave: Collection = {
+      ...col,
+      id: targetId,
+      folders: col.folders || [],
+      requests: col.requests || [],
+    };
+
+    const index = this.data.collections.findIndex((c) => c.id === targetId);
     if (index >= 0) {
-      this.data.collections[index] = col;
+      this.data.collections[index] = toSave;
     } else {
-      if (!col.id) col.id = `col-${crypto.randomUUID()}`;
-      this.data.collections.push(col);
+      this.data.collections.push(toSave);
     }
-    this.saveData(this.data);
-    return col;
+    this.saveLocalData(this.data);
+
+    // Write ONLY this collection row to Turso
+    const { id, workspaceId, name, description, sortOrder, ...extra } = toSave;
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO collections (id, workspace_id, name, description, sort_order, data, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE SET
+                workspace_id = excluded.workspace_id,
+                name = excluded.name,
+                description = excluded.description,
+                sort_order = excluded.sort_order,
+                data = excluded.data,
+                updated_at = excluded.updated_at;`,
+        args: [
+          id,
+          workspaceId || DEFAULT_WORKSPACE_ID,
+          name,
+          description || null,
+          typeof sortOrder === 'number' ? sortOrder : 0,
+          JSON.stringify(extra),
+        ],
+      },
+    ]);
+
+    return toSave;
   }
 
   deleteCollection(id: string): boolean {
     const prevLen = this.data.collections.length;
     this.data.collections = this.data.collections.filter((c) => c.id !== id);
-    this.saveData(this.data);
-    return this.data.collections.length < prevLen;
+    if (this.data.collections.length < prevLen) {
+      this.saveLocalData(this.data);
+      this.executeTursoBackground([
+        { sql: `DELETE FROM collections WHERE id = ?;`, args: [id] },
+      ]);
+      return true;
+    }
+    return false;
   }
 
   // Environments
@@ -498,7 +666,6 @@ class LocalFileStorage {
         ...env,
         variables: env.variables.map((v) => ({
           ...v,
-          // Mask secret variables when returning to client
           value: v.isSecret ? '••••••••' : v.value,
         })),
         dbConnection: env.dbConnection
@@ -527,12 +694,10 @@ class LocalFileStorage {
   saveEnvironment(env: Environment): Environment {
     const index = this.data.environments.findIndex((e) => e.id === env.id);
 
-    // Encrypt secret variables
     const processedVariables = env.variables.map((v) => {
       if (v.isSecret && v.value && !v.value.startsWith('••••')) {
         return { ...v, value: encryptSecret(v.value) };
       }
-      // If masked value unchanged, keep existing encrypted value
       if (v.isSecret && v.value?.startsWith('••••') && index >= 0) {
         const existingVar = this.data.environments[index].variables.find((ev) => ev.id === v.id);
         if (existingVar) {
@@ -559,18 +724,44 @@ class LocalFileStorage {
     } else {
       this.data.environments.push(toSave);
     }
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO environments (id, workspace_id, name, variables, db_connection, updated_at)
+              VALUES (?, ?, ?, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE SET
+                workspace_id = excluded.workspace_id,
+                name = excluded.name,
+                variables = excluded.variables,
+                db_connection = excluded.db_connection,
+                updated_at = excluded.updated_at;`,
+        args: [
+          toSave.id,
+          toSave.workspaceId || DEFAULT_WORKSPACE_ID,
+          toSave.name,
+          JSON.stringify(toSave.variables),
+          toSave.dbConnection ? JSON.stringify(toSave.dbConnection) : null,
+        ],
+      },
+    ]);
+
     return toSave;
   }
 
   deleteEnvironment(id: string): boolean {
     const prevLen = this.data.environments.length;
     this.data.environments = this.data.environments.filter((e) => e.id !== id);
-    this.saveData(this.data);
-    return this.data.environments.length < prevLen;
+    if (this.data.environments.length < prevLen) {
+      this.saveLocalData(this.data);
+      this.executeTursoBackground([
+        { sql: `DELETE FROM environments WHERE id = ?;`, args: [id] },
+      ]);
+      return true;
+    }
+    return false;
   }
 
-  // Resolved variable map for execution
   getResolvedVariables(environmentId?: string): Record<string, string> {
     const vars: Record<string, string> = {};
     if (!environmentId) return vars;
@@ -584,6 +775,72 @@ class LocalFileStorage {
       }
     }
     return vars;
+  }
+
+  // Flows
+  getFlows(workspaceId: string): Flow[] {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    return this.data.flows.filter((f) => f.workspaceId === workspaceId);
+  }
+
+  getFlow(id: string): Flow | undefined {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    return this.data.flows.find((f) => f.id === id);
+  }
+
+  saveFlow(flow: Flow): Flow {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    const index = this.data.flows.findIndex((f) => f.id === flow.id);
+    const toSave: Flow = {
+      ...flow,
+      id: flow.id || `flow-${crypto.randomUUID()}`,
+      updatedAt: new Date().toISOString(),
+      createdAt: flow.createdAt || new Date().toISOString(),
+    };
+    if (index >= 0) {
+      this.data.flows[index] = toSave;
+    } else {
+      this.data.flows.push(toSave);
+    }
+    this.saveLocalData(this.data);
+
+    const { id, workspaceId, name, description, createdAt, updatedAt, ...data } = toSave;
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO flows (id, workspace_id, name, description, data, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+              ON CONFLICT(id) DO UPDATE SET
+                workspace_id = excluded.workspace_id,
+                name = excluded.name,
+                description = excluded.description,
+                data = excluded.data,
+                updated_at = excluded.updated_at;`,
+        args: [
+          id,
+          workspaceId || DEFAULT_WORKSPACE_ID,
+          name,
+          description || null,
+          JSON.stringify(data),
+          createdAt,
+        ],
+      },
+    ]);
+
+    return toSave;
+  }
+
+  deleteFlow(id: string): boolean {
+    if (!Array.isArray(this.data.flows)) this.data.flows = [];
+    const prevLen = this.data.flows.length;
+    this.data.flows = this.data.flows.filter((f) => f.id !== id);
+    if (this.data.flows.length < prevLen) {
+      this.saveLocalData(this.data);
+      this.executeTursoBackground([
+        { sql: `DELETE FROM flows WHERE id = ?;`, args: [id] },
+      ]);
+      return true;
+    }
+    return false;
   }
 
   // History
@@ -604,17 +861,24 @@ class LocalFileStorage {
     if (this.data.history.length > 500) {
       this.data.history.pop();
     }
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
 
-    if (process.env.DATABASE_API_URL) {
-      try {
-        fetch(new URL('/data/history', process.env.DATABASE_API_URL), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item),
-        }).catch(() => {});
-      } catch (_) {}
-    }
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO history (id, workspace_id, method, url, status, size, time, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        args: [
+          item.id,
+          item.workspaceId,
+          item.method,
+          item.url,
+          item.status,
+          item.size,
+          item.time,
+          item.createdAt,
+        ],
+      },
+    ]);
 
     return item;
   }
@@ -627,10 +891,13 @@ class LocalFileStorage {
 
   clearHistory(workspaceId: string) {
     this.data.history = this.data.history.filter((h) => h.workspaceId !== workspaceId);
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+    this.executeTursoBackground([
+      { sql: `DELETE FROM history WHERE workspace_id = ?;`, args: [workspaceId] },
+    ]);
   }
 
-  // Users (Admin-managed, Login-only)
+  // Users (Admin-managed, dedicated users table)
   getUsers(): Array<Omit<StoredUser, 'passwordHash' | 'salt'>> {
     if (!Array.isArray(this.data.users)) this.data.users = [];
     return this.data.users.map(({ passwordHash, salt, ...user }) => user);
@@ -640,7 +907,10 @@ class LocalFileStorage {
     if (!Array.isArray(this.data.users)) this.data.users = [];
     const normalized = email.trim().toLowerCase();
     let user = this.data.users.find((u) => u.email.toLowerCase() === normalized);
+
+    // If requested user is default admin and not found, automatically seed and return
     if (!user && (normalized === 'admin@internalapi.local' || normalized === 'admin@company.internal')) {
+      this.seedDefaultAdmin();
       user = this.data.users.find(
         (u) =>
           u.email.toLowerCase() === 'admin@internalapi.local' ||
@@ -680,7 +950,23 @@ class LocalFileStorage {
     };
 
     this.data.users.push(newUser);
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, 1, ?);`,
+        args: [
+          newUser.id,
+          newUser.email,
+          newUser.name,
+          newUser.passwordHash,
+          newUser.salt,
+          newUser.role,
+          newUser.createdAt,
+        ],
+      },
+    ]);
 
     const { passwordHash: _, salt: __, ...sanitized } = newUser;
     return sanitized;
@@ -690,8 +976,14 @@ class LocalFileStorage {
     if (!Array.isArray(this.data.users)) this.data.users = [];
     const prevLen = this.data.users.length;
     this.data.users = this.data.users.filter((u) => u.id !== id);
-    this.saveData(this.data);
-    return this.data.users.length < prevLen;
+    if (this.data.users.length < prevLen) {
+      this.saveLocalData(this.data);
+      this.executeTursoBackground([
+        { sql: `DELETE FROM users WHERE id = ?;`, args: [id] },
+      ]);
+      return true;
+    }
+    return false;
   }
 
   resetUserPassword(userId: string, newPassword: string): boolean {
@@ -701,7 +993,14 @@ class LocalFileStorage {
     const { hash, salt } = hashPassword(newPassword);
     user.passwordHash = hash;
     user.salt = salt;
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `UPDATE users SET password_hash = ?, salt = ? WHERE id = ?;`,
+        args: [hash, salt, userId],
+      },
+    ]);
     return true;
   }
 
@@ -734,7 +1033,15 @@ class LocalFileStorage {
       user.salt = salt;
     }
 
-    this.saveData(this.data);
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `UPDATE users SET name = ?, password_hash = ?, salt = ? WHERE id = ?;`,
+        args: [user.name, user.passwordHash, user.salt, userId],
+      },
+    ]);
+
     const { passwordHash: _, salt: __, ...sanitized } = user;
     return { success: true, user: sanitized };
   }
@@ -752,8 +1059,10 @@ class LocalFileStorage {
         u.email.toLowerCase() === 'admin@company.internal' ||
         u.email.toLowerCase() === 'admin@internalapi.local'
     );
+
+    const { hash, salt } = hashPassword(password);
+
     if (!existing) {
-      const { hash, salt } = hashPassword(password);
       const adminUser: StoredUser = {
         id: `usr-admin-${crypto.randomUUID()}`,
         email: normalizedEmail,
@@ -765,18 +1074,32 @@ class LocalFileStorage {
         createdAt: new Date().toISOString(),
       };
       this.data.users.push(adminUser);
-      this.saveData(this.data);
+      this.saveLocalData(this.data);
+
+      this.executeTursoBackground([
+        {
+          sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at)
+                VALUES (?, ?, ?, ?, ?, 'admin', 1, datetime('now'))
+                ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash, salt = excluded.salt;`,
+          args: [adminUser.id, adminUser.email, adminUser.name, hash, salt],
+        },
+      ]);
     } else if (
       existing.passwordHash === '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918' ||
       !verifyPassword(password, existing.passwordHash, existing.salt)
     ) {
-      const { hash, salt } = hashPassword(password);
       existing.passwordHash = hash;
       existing.salt = salt;
-      this.saveData(this.data);
+      this.saveLocalData(this.data);
+
+      this.executeTursoBackground([
+        {
+          sql: `UPDATE users SET password_hash = ?, salt = ? WHERE id = ?;`,
+          args: [hash, salt, existing.id],
+        },
+      ]);
     }
   }
 }
 
 export const db = new LocalFileStorage();
-

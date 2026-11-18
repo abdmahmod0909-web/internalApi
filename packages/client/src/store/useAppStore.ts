@@ -278,7 +278,19 @@ function getInitialCollections(): Collection[] {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(
+          (c: any) =>
+            c &&
+            typeof c === 'object' &&
+            c.id &&
+            typeof c.id === 'string' &&
+            c.name &&
+            typeof c.name === 'string' &&
+            !c.error &&
+            !c.statusCode
+        );
+      }
     } catch {}
   }
   return [];
@@ -688,10 +700,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeWorkspaceId, activeEnvironmentId } = get();
     const envParam = activeEnvironmentId ? `&environmentId=${activeEnvironmentId}` : '';
     try {
-      const res = await apiFetch(`/api/collections?workspaceId=${activeWorkspaceId}${envParam}`).then((r) => r.json());
-      if (Array.isArray(res)) {
-        set({ collections: res });
-        setStoredItem('internalapi_collections', JSON.stringify(res));
+      const res = await apiFetch(`/api/collections?workspaceId=${activeWorkspaceId}${envParam}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const valid = data.filter(
+          (c: any) =>
+            c &&
+            typeof c === 'object' &&
+            c.id &&
+            typeof c.id === 'string' &&
+            c.name &&
+            typeof c.name === 'string' &&
+            !c.error &&
+            !c.statusCode
+        );
+        set({ collections: valid });
+        setStoredItem('internalapi_collections', JSON.stringify(valid));
       }
     } catch (e) {
       console.error('Failed to load collections:', e);

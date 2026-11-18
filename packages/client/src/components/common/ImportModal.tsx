@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useAppStore } from '../../store/useAppStore.js';
-import { X, Upload, FileText, CheckCircle2 } from 'lucide-react';
+import { useAppStore, apiFetch } from '../../store/useAppStore.js';
+import { X, Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { isPostmanCollection, importPostmanCollection, isCurlCommand, parseCurlCommand } from '@internalapi/shared';
 
 interface Props {
@@ -13,8 +13,9 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [rawText, setRawText] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const { activeWorkspaceId, createCollection, openTab } = useAppStore();
+  const { activeWorkspaceId, createCollection, openTab, currentUser, setLoginModalOpen } = useAppStore();
 
   if (!isOpen) return null;
 
@@ -28,6 +29,13 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    if (!currentUser) {
+      setErrorMsg('You must be signed in to import collections. Please sign in first.');
+      return;
+    }
+
+    setIsProcessing(true);
+
     // 1. Check if cURL
     if (isCurlCommand(trimmed)) {
       try {
@@ -39,6 +47,8 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
       } catch (e: any) {
         setErrorMsg('Failed to parse cURL: ' + e.message);
         return;
+      } finally {
+        setIsProcessing(false);
       }
     }
 
@@ -48,15 +58,28 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
       if (isPostmanCollection(parsedJson)) {
         const converted = importPostmanCollection(parsedJson, activeWorkspaceId);
-        // Save collection to backend
-        const res = await fetch('/api/collections', {
+        // Save collection to backend via authenticated apiFetch
+        const res = await apiFetch('/api/collections', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(converted),
         });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || `Server returned status ${res.status}`);
+        }
+
         const saved = await res.json();
+        if (!saved || !saved.id || !saved.name) {
+          throw new Error('Server returned an invalid collection response');
+        }
+
         useAppStore.setState((state) => {
-          const next = [...state.collections, saved];
+          const cleanExisting = state.collections.filter(
+            (c) => c && typeof c === 'object' && c.id && c.name && !('error' in c)
+          );
+          const next = [...cleanExisting, saved];
           try {
             if (typeof window !== 'undefined' && window.localStorage) {
               window.localStorage.setItem('internalapi_collections', JSON.stringify(next));
@@ -73,17 +96,30 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
       if (parsedJson.name && (Array.isArray(parsedJson.folders) || Array.isArray(parsedJson.requests))) {
         const col = {
           ...parsedJson,
-          id: `col-${Date.now()}`,
+          id: parsedJson.id || `col-${Date.now()}`,
           workspaceId: activeWorkspaceId,
         };
-        const res = await fetch('/api/collections', {
+        const res = await apiFetch('/api/collections', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(col),
         });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || `Server returned status ${res.status}`);
+        }
+
         const saved = await res.json();
+        if (!saved || !saved.id || !saved.name) {
+          throw new Error('Server returned an invalid collection response');
+        }
+
         useAppStore.setState((state) => {
-          const next = [...state.collections, saved];
+          const cleanExisting = state.collections.filter(
+            (c) => c && typeof c === 'object' && c.id && c.name && !('error' in c)
+          );
+          const next = [...cleanExisting, saved];
           try {
             if (typeof window !== 'undefined' && window.localStorage) {
               window.localStorage.setItem('internalapi_collections', JSON.stringify(next));
@@ -98,7 +134,9 @@ export const ImportModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
       setErrorMsg('JSON is not recognized as a valid Postman v2.1 or InternalAPI collection.');
     } catch (e: any) {
-      setErrorMsg('Invalid JSON format: ' + e.message);
+      setErrorMsg('Import error: ' + (e.message || String(e)));
+    } finally {
+      setIsProcessing(false);
     }
   };
 
