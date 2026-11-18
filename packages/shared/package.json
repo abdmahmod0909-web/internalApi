@@ -1,12 +1,16 @@
 {
   "name": "@internalapi/shared",
   "version": "1.2.0",
-  "type": "module",
   "main": "dist/index.js",
-  "exports": {
-    ".": "./dist/index.js"
-  },
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
@@ -16,4 +20,3 @@
     "vitest": "^1.6.0"
   }
 }
-
