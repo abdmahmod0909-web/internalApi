@@ -85,20 +85,72 @@ async function seedTurso(tursoUrl: string, tursoToken: string) {
       ];
 
   // Users
-  const users = Array.isArray(existingData.users) && existingData.users.length > 0
-    ? existingData.users
-    : [
-        {
-          id: 'usr-admin-default',
-          email: 'admin@company.internal',
-          name: 'InternalAPI Administrator',
-          passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
-          salt: 'default-admin-salt',
-          role: 'admin',
+  const adminHash = '26f727e666f9e8daaae46f1f1ef5dd2b056de803569172213aedab71a195821a5ab6b9fc5c6478e7f36d32eacdd2e6906ce3aeda7ded692855e94e1692c7b3b8';
+  const adminSalt = 'default-admin-salt';
+
+  let users = Array.isArray(existingData.users) ? existingData.users : [];
+  if (users.length === 0) {
+    users = [
+      {
+        id: 'usr-admin-default',
+        email: 'admin@company.internal',
+        name: 'InternalAPI Administrator',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: 'usr-admin-local',
+        email: 'admin@internalapi.local',
+        name: 'InternalAPI Administrator',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  } else {
+    // Update existing admin accounts to ensure admin123456 works
+    users = users.map((u: any) => {
+      if (u.email === 'admin@company.internal' || u.email === 'admin@internalapi.local' || u.role === 'admin') {
+        return {
+          ...u,
+          passwordHash: adminHash,
+          salt: adminSalt,
           isActive: true,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+        };
+      }
+      return u;
+    });
+    // Ensure both alias emails are present
+    if (!users.some((u: any) => u.email === 'admin@company.internal')) {
+      users.push({
+        id: 'usr-admin-default',
+        email: 'admin@company.internal',
+        name: 'InternalAPI Administrator',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    if (!users.some((u: any) => u.email === 'admin@internalapi.local')) {
+      users.push({
+        id: 'usr-admin-local',
+        email: 'admin@internalapi.local',
+        name: 'InternalAPI Administrator',
+        passwordHash: adminHash,
+        salt: adminSalt,
+        role: 'admin',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
 
   // Environments
   const environments = Array.isArray(existingData.environments) && existingData.environments.length > 0

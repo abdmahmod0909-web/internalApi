@@ -45,7 +45,7 @@ const DEFAULT_DATA: StorageData = {
       id: 'usr-admin-default',
       email: 'admin@internalapi.local',
       name: 'InternalAPI Admin',
-      passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+      passwordHash: '26f727e666f9e8daaae46f1f1ef5dd2b056de803569172213aedab71a195821a5ab6b9fc5c6478e7f36d32eacdd2e6906ce3aeda7ded692855e94e1692c7b3b8',
       salt: 'default-admin-salt',
       role: 'admin',
       isActive: true,
