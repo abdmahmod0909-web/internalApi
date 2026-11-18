@@ -842,8 +842,44 @@ export const RequestBuilder: React.FC = () => {
         )}
 
         {activeSubTab === 'headers' && (
-          <div className="p-3">
-            <h3 className="text-xs font-semibold text-gray-400 mb-2">Request Headers</h3>
+          <div className="p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-semibold text-gray-300">Request Headers</h3>
+                <p className="text-[11px] text-gray-500">Headers sent with your HTTP request</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentHeaders = req.headers || [];
+                  const existingKeys = new Set(currentHeaders.map((h) => h.key.trim().toLowerCase()));
+                  const toAdd: any[] = [];
+                  if (!existingKeys.has('user-agent')) {
+                    toAdd.push({ id: `h-${Date.now()}-1`, key: 'User-Agent', value: 'PostmanRuntime/7.39.0', isEnabled: true });
+                  }
+                  if (!existingKeys.has('accept')) {
+                    toAdd.push({ id: `h-${Date.now()}-2`, key: 'Accept', value: '*/*', isEnabled: true });
+                  }
+                  if (!existingKeys.has('accept-encoding')) {
+                    toAdd.push({ id: `h-${Date.now()}-3`, key: 'Accept-Encoding', value: 'gzip, deflate, br', isEnabled: true });
+                  }
+                  if (!existingKeys.has('connection')) {
+                    toAdd.push({ id: `h-${Date.now()}-4`, key: 'Connection', value: 'keep-alive', isEnabled: true });
+                  }
+                  if (req.bodyType === 'json' && !existingKeys.has('content-type')) {
+                    toAdd.push({ id: `h-${Date.now()}-5`, key: 'Content-Type', value: 'application/json', isEnabled: true });
+                  }
+                  updateActiveRequest((prev) => ({
+                    ...prev,
+                    headers: [...currentHeaders.filter((h) => h.key || h.value), ...toAdd],
+                  }));
+                }}
+                className="px-2.5 py-1 text-[11px] font-medium text-orange-400 hover:text-orange-300 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 rounded transition-colors"
+                title="Add Postman standard default headers (User-Agent, Accept, Accept-Encoding, Connection)"
+              >
+                + Add Postman Default Headers
+              </button>
+            </div>
             <KeyValueEditor
               items={req.headers || []}
               onChange={(items) => updateActiveRequest((prev) => ({ ...prev, headers: items }))}

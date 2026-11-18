@@ -99,9 +99,12 @@ export async function executeProxyRequest(
   const followRedirects = requestData.settings?.followRedirects ?? true;
   const verifySsl = requestData.settings?.verifySsl ?? true;
 
-  // Build Request Headers
+  // Build Request Headers with standard Postman-compatible defaults
   const requestHeaders: Record<string, string> = {
-    'User-Agent': 'InternalAPI/1.0.0 (Self-Hosted; +https://internalapi.local)',
+    'User-Agent': 'PostmanRuntime/7.39.0',
+    'Accept': '*/*',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
   };
 
   // Add custom headers from request

@@ -7,6 +7,7 @@ import type {
   ApiRequestData,
   ApiResponseData,
   HttpMethod,
+  KeyValueItem,
   TestResultItem,
   Flow,
   FlowNode,
@@ -44,12 +45,24 @@ export interface OtaInfo {
   message?: string;
 }
 
+export const DEFAULT_POSTMAN_HEADERS: KeyValueItem[] = [
+  { id: 'hdr-def-1', key: 'User-Agent', value: 'PostmanRuntime/7.39.0', isEnabled: true },
+  { id: 'hdr-def-2', key: 'Accept', value: '*/*', isEnabled: true },
+  { id: 'hdr-def-3', key: 'Accept-Encoding', value: 'gzip, deflate, br', isEnabled: true },
+  { id: 'hdr-def-4', key: 'Connection', value: 'keep-alive', isEnabled: true },
+];
+
 const DEFAULT_NEW_REQUEST: ApiRequestData = {
   name: '',
   method: 'GET',
   url: '',
   queryParams: [],
-  headers: [],
+  headers: [
+    { id: 'hdr-def-1', key: 'User-Agent', value: 'PostmanRuntime/7.39.0', isEnabled: true },
+    { id: 'hdr-def-2', key: 'Accept', value: '*/*', isEnabled: true },
+    { id: 'hdr-def-3', key: 'Accept-Encoding', value: 'gzip, deflate, br', isEnabled: true },
+    { id: 'hdr-def-4', key: 'Connection', value: 'keep-alive', isEnabled: true },
+  ],
   pathVars: [],
   auth: { type: 'none' },
   bodyType: 'none',

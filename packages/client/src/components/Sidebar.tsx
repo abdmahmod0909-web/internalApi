@@ -158,6 +158,63 @@ export const Sidebar: React.FC = () => {
     setEditingReqId(null);
   };
 
+  const requestMatches = (req: any, q: string) => {
+    if (!req) return false;
+    const nameMatch = req.name && req.name.toLowerCase().includes(q);
+    const urlMatch = req.url && req.url.toLowerCase().includes(q);
+    const methodMatch = req.method && req.method.toLowerCase().includes(q);
+    return Boolean(nameMatch || urlMatch || methodMatch);
+  };
+
+  const isSearching = filterText.trim().length > 0;
+
+  const filteredCollections = React.useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    if (!q) return collections;
+
+    return collections
+      .map((col) => {
+        const colNameMatches =
+          (col.name && col.name.toLowerCase().includes(q)) ||
+          (col.description && col.description.toLowerCase().includes(q));
+
+        const matchingRequests = (col.requests || []).filter((r) => requestMatches(r, q));
+
+        const matchingFolders = (col.folders || [])
+          .map((fld) => {
+            const fldNameMatches = fld.name && fld.name.toLowerCase().includes(q);
+            const fldMatchingReqs = (fld.requests || []).filter((r) => requestMatches(r, q));
+
+            if (fldNameMatches) {
+              return fld;
+            }
+            if (fldMatchingReqs.length > 0) {
+              return {
+                ...fld,
+                requests: fldMatchingReqs,
+              };
+            }
+            return null;
+          })
+          .filter(Boolean) as typeof col.folders;
+
+        if (colNameMatches) {
+          return col;
+        }
+
+        if (matchingFolders.length > 0 || matchingRequests.length > 0) {
+          return {
+            ...col,
+            folders: matchingFolders,
+            requests: matchingRequests,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean) as typeof collections;
+  }, [collections, filterText]);
+
   const filteredHistory = history.filter((item) =>
     item.url.toLowerCase().includes(filterText.toLowerCase()) ||
     item.method.toLowerCase().includes(filterText.toLowerCase())
@@ -322,8 +379,17 @@ export const Sidebar: React.FC = () => {
             placeholder={`Filter ${activeTab}...`}
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            className="w-full bg-gray-900 border border-gray-800 rounded pl-8 pr-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:border-gray-700"
+            className="w-full bg-gray-900 border border-gray-800 rounded pl-8 pr-7 py-1.5 text-xs text-gray-200 placeholder-gray-500 outline-none focus:border-gray-700"
           />
+          {filterText && (
+            <button
+              onClick={() => setFilterText('')}
+              className="absolute right-2 top-2 text-gray-400 hover:text-gray-200"
+              title="Clear search filter"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -352,7 +418,7 @@ export const Sidebar: React.FC = () => {
             {activeTab === 'collections' && (
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
-              <span>Collections ({collections.length})</span>
+              <span>Collections ({isSearching ? `${filteredCollections.length} of ${collections.length}` : collections.length})</span>
               <button
                 onClick={handleCreateCollection}
                 className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
@@ -396,18 +462,35 @@ export const Sidebar: React.FC = () => {
               </div>
             )}
 
-            {collections.length === 0 && !isCreatingCollection ? (
+            {filteredCollections.length === 0 && !isCreatingCollection ? (
               <div className="text-center py-8 text-xs text-gray-500">
-                No collections yet.<br />
-                <button
-                  onClick={handleCreateCollection}
-                  className="text-orange-500 hover:underline mt-1 inline-block"
-                >
-                  Click here to create one.
-                </button>
+                {isSearching ? (
+                  <div className="space-y-1.5 px-3">
+                    <p className="text-gray-400">No collections or requests match</p>
+                    <p className="font-mono text-orange-400 text-[11px] truncate">"{filterText}"</p>
+                    <button
+                      onClick={() => setFilterText('')}
+                      className="text-orange-500 hover:underline mt-2 inline-block font-medium"
+                    >
+                      Clear search filter
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    No collections yet.<br />
+                    <button
+                      onClick={handleCreateCollection}
+                      className="text-orange-500 hover:underline mt-1 inline-block"
+                    >
+                      Click here to create one.
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              collections.map((col) => (
+              filteredCollections.map((col) => {
+                const isColOpen = isSearching || !collapsedFolders[col.id];
+                return (
                 <div key={col.id} className="mb-2">
                   {/* Collection Header or Inline Rename */}
                   {editingColId === col.id ? (
@@ -443,10 +526,10 @@ export const Sidebar: React.FC = () => {
                         className="flex items-center space-x-1.5 flex-1 min-w-0"
                         onClick={() => toggleFolder(col.id)}
                       >
-                        {collapsedFolders[col.id] ? (
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                        ) : (
+                        {isColOpen ? (
                           <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                         )}
                         <Folder className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                         <span className="font-semibold truncate">{col.name}</span>
@@ -580,7 +663,7 @@ export const Sidebar: React.FC = () => {
                   )}
 
                   {/* Folders & Requests List */}
-                  {!collapsedFolders[col.id] && (
+                  {isColOpen && (
                     <div className="pl-3 space-y-0.5 mt-0.5 border-l border-gray-800/80 ml-3">
                       {/* Prominent Action Bar inside expanded collection: + Folder | + Request */}
                       <div className="flex items-center space-x-2 py-1 px-1.5 text-[11px] bg-gray-900/60 rounded my-1 border border-gray-800/60">
@@ -610,7 +693,9 @@ export const Sidebar: React.FC = () => {
                       </div>
 
                       {/* Sub-Folders */}
-                      {col.folders?.map((fld) => (
+                      {col.folders?.map((fld) => {
+                        const isFldOpen = isSearching || !collapsedFolders[fld.id];
+                        return (
                         <div key={fld.id}>
                           {/* Folder Header or Inline Rename */}
                           {editingFolderId === fld.id ? (
@@ -646,10 +731,10 @@ export const Sidebar: React.FC = () => {
                                 onClick={() => toggleFolder(fld.id)}
                                 className="flex items-center space-x-1.5 flex-1 min-w-0"
                               >
-                                {collapsedFolders[fld.id] ? (
-                                  <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />
-                                ) : (
+                                {isFldOpen ? (
                                   <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />
                                 )}
                                 <FolderOpen className="w-3 h-3 text-amber-500 shrink-0" />
                                 <span className="truncate font-medium">{fld.name}</span>
@@ -726,7 +811,7 @@ export const Sidebar: React.FC = () => {
                           )}
 
                           {/* Requests in Folder */}
-                          {!collapsedFolders[fld.id] && (
+                          {isFldOpen && (
                             <div className="pl-3 space-y-0.5 border-l border-gray-800/60 ml-2">
                               {fld.requests?.map((req) => {
                                 const reqId = req.id || `req-${Math.random()}`;
@@ -801,7 +886,8 @@ export const Sidebar: React.FC = () => {
                             </div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
 
                       {/* Direct Requests in Collection */}
                       {col.requests?.map((req) => {
@@ -877,7 +963,8 @@ export const Sidebar: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
