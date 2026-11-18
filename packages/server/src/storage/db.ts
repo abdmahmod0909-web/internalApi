@@ -58,6 +58,27 @@ export interface StorageData {
 const DEFAULT_WORKSPACE_ID = 'ws-default-company';
 
 function getDataFilePath(): { dataDir: string; dataFile: string } {
+  // If running on Vercel Serverless Functions, the filesystem outside /tmp is read-only
+  if (process.env.VERCEL) {
+    const tmpDir = '/tmp';
+    const tmpFile = path.join(tmpDir, 'store.json');
+    if (!fs.existsSync(tmpFile)) {
+      try {
+        const candidatePaths = [
+          path.resolve(process.cwd(), 'packages/server/.data/store.json'),
+          path.resolve(process.cwd(), '.data/store.json'),
+          path.resolve(__dirname, '../.data/store.json'),
+          path.resolve(__dirname, '.data/store.json'),
+        ];
+        const seedPath = candidatePaths.find((p) => fs.existsSync(p));
+        if (seedPath) {
+          fs.copyFileSync(seedPath, tmpFile);
+        }
+      } catch (_) {}
+    }
+    return { dataDir: tmpDir, dataFile: tmpFile };
+  }
+
   // Check packages/server/.data/store.json first
   const serverPath = path.resolve(process.cwd(), 'packages/server/.data');
   if (fs.existsSync(path.join(serverPath, 'store.json'))) {

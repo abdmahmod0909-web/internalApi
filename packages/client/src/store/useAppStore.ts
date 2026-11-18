@@ -800,7 +800,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         signal: controller.signal,
       });
 
-      const responseData: ApiResponseData = await res.json();
+      if (!res.ok) {
+        const errorText = await res.text();
+        let message = `Server returned HTTP ${res.status}: ${res.statusText || 'Error'}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          if (parsed.error) message = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+          else if (parsed.message) message = parsed.message;
+        } catch {
+          if (errorText.trim()) {
+            message = errorText.trim();
+          }
+        }
+        throw new Error(message);
+      }
+
+      let responseData: ApiResponseData;
+      try {
+        responseData = await res.json();
+      } catch (jsonErr: any) {
+        throw new Error(`Failed to parse backend response: ${jsonErr.message}`);
+      }
 
       // 2. Run Tests / Post-response Script if defined
       let testResults: TestResultItem[] = [];
@@ -1608,6 +1628,11 @@ export const useAppStore = create<AppState>((set, get) => ({
               workspaceId: activeWorkspaceId,
             }),
           });
+
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Proxy error (${res.status}): ${errorText || res.statusText}`);
+          }
 
           const resp: ApiResponseData = await res.json();
           lastResponse = resp;

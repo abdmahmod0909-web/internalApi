@@ -58,4 +58,14 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   });
 }
 
-export default app;
+// Vercel Serverless Function entry point
+const handler = async function (req: any, res: any) {
+  await app.ready();
+  // Ensure req.url matches Fastify registered routes whether /api prefix was preserved or stripped
+  if (req.url && !req.url.startsWith('/api') && req.url !== '/health' && !req.url.startsWith('/health')) {
+    req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
+  }
+  app.server.emit('request', req, res);
+};
+
+export default Object.assign(handler, app);
