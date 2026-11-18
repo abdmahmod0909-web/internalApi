@@ -570,3 +570,25 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   return app;
 }
+
+const defaultApp: FastifyInstance = buildApp();
+export const app = defaultApp;
+
+// Vercel Serverless Function entry point (required when framework: fastify loads app.js)
+const handler = async function (req: any, res: any) {
+  await defaultApp.ready();
+  await db.syncFromTurso();
+  // Ensure req.url matches Fastify registered routes whether /api prefix was preserved or stripped
+  if (req.url && !req.url.startsWith('/api') && req.url !== '/health' && !req.url.startsWith('/health')) {
+    req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
+  }
+  return new Promise((resolve, reject) => {
+    res.on('finish', () => resolve(true));
+    res.on('close', () => resolve(true));
+    res.on('error', (err: any) => reject(err));
+    defaultApp.server.emit('request', req, res);
+  });
+};
+
+export default Object.assign(handler, defaultApp);
+
