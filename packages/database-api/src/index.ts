@@ -11,6 +11,11 @@ export function buildDatabaseApp(): FastifyInstance {
     logger: process.env.NODE_ENV !== 'test',
   });
 
+  // Ensure Turso database is initialized and latest data is synced
+  app.addHook('onRequest', async () => {
+    await dbService.ensureReady();
+  });
+
   // Health
   app.get('/health', async () => {
     return {

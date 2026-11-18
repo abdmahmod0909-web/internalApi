@@ -1,4 +1,5 @@
 import { buildApp } from './app.js';
+import { db } from './storage/db.js';
 import dotenv from 'dotenv';
 import type { FastifyInstance } from 'fastify';
 
@@ -61,6 +62,7 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
 // Vercel Serverless Function entry point
 const handler = async function (req: any, res: any) {
   await app.ready();
+  await db.syncFromTurso();
   // Ensure req.url matches Fastify registered routes whether /api prefix was preserved or stripped
   if (req.url && !req.url.startsWith('/api') && req.url !== '/health' && !req.url.startsWith('/health')) {
     req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;

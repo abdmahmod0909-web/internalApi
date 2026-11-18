@@ -317,6 +317,65 @@ class LocalFileStorage {
     }
   }
 
+  private syncPromise: Promise<void> | null = null;
+
+  public async syncFromTurso(): Promise<void> {
+    const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
+    if (!tursoUrl || !tursoToken) return;
+
+    if (!this.syncPromise) {
+      this.syncPromise = (async () => {
+        try {
+          const endpoint = `${tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')}/v2/pipeline`;
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${tursoToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              requests: [
+                {
+                  type: 'execute',
+                  stmt: {
+                    sql: `CREATE TABLE IF NOT EXISTS internalapi_store (
+                      id TEXT PRIMARY KEY,
+                      data TEXT NOT NULL,
+                      updated_at TEXT NOT NULL
+                    );`,
+                    args: [],
+                  },
+                },
+                {
+                  type: 'execute',
+                  stmt: {
+                    sql: `SELECT data FROM internalapi_store WHERE id = 'main';`,
+                    args: [],
+                  },
+                },
+                { type: 'close' },
+              ],
+            }),
+          });
+          if (res.ok) {
+            const json: any = await res.json();
+            const row = json.results?.[1]?.response?.result?.rows?.[0]?.[0];
+            if (row && typeof row.value === 'string') {
+              const remoteData = JSON.parse(row.value);
+              if (remoteData?.workspaces && Array.isArray(remoteData.workspaces)) {
+                this.data = remoteData;
+              }
+            } else {
+              this.saveData(this.data);
+            }
+          }
+        } catch (_) {}
+      })();
+    }
+    await this.syncPromise;
+  }
+
   // Workspaces
   getWorkspaces(): Workspace[] {
     return this.data.workspaces;

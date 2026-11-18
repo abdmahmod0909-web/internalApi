@@ -83,6 +83,8 @@ export class DatabaseService {
   private tursoUrl?: string;
   private tursoToken?: string;
 
+  private readyPromise: Promise<void> | null = null;
+
   constructor() {
     this.filePath = process.env.VERCEL
       ? '/tmp/db-api-store.json'
@@ -92,19 +94,21 @@ export class DatabaseService {
     this.data = this.loadInitial();
 
     if (this.driver === 'turso') {
-      this.initTurso().catch(() => {});
+      this.ensureReady().catch(() => {});
     }
   }
 
   private initDrivers() {
+    const dbType = (process.env.DB_TYPE || '').toLowerCase();
     const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
     const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
 
+    // Prioritize Turso cloud database above PostgreSQL
     if (tursoUrl && tursoToken) {
       this.driver = 'turso';
       this.tursoUrl = tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '');
       this.tursoToken = tursoToken;
-    } else if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+    } else if (dbType !== 'turso' && (process.env.DATABASE_URL || process.env.POSTGRES_URL)) {
       this.driver = 'postgres';
       this.pgPool = new pg.Pool({
         connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
@@ -117,6 +121,16 @@ export class DatabaseService {
 
   public getDriver() {
     return this.driver;
+  }
+
+  public async ensureReady(): Promise<void> {
+    if (this.driver !== 'turso') return;
+    if (!this.readyPromise) {
+      this.readyPromise = this.initTurso().catch((err) => {
+        console.error('Turso init error:', err);
+      });
+    }
+    await this.readyPromise;
   }
 
   public async queryTurso(sql: string, args: any[] = []): Promise<any> {
