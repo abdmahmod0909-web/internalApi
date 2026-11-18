@@ -34,7 +34,8 @@ function generateVersionPlugin() {
 export default defineConfig({
   // Crucial for Electron: forces Vite to use relative asset paths (./assets/...) 
   // so the packaged app can load assets offline via file:// or local server.
-  base: './',
+  // For Vercel cloud deployment, root-relative base ensures smooth client routing.
+  base: process.env.VERCEL ? '/' : './',
   plugins: [react(), generateVersionPlugin()],
   resolve: {
     alias: {

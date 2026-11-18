@@ -336,7 +336,7 @@ export const Navbar: React.FC = () => {
 
         {/* Open in Web Browser Button */}
         <a
-          href="http://127.0.0.1:39281/"
+          href={typeof window !== 'undefined' && window.location.hostname !== '127.0.0.1' && window.location.hostname !== 'localhost' ? window.location.origin : 'http://127.0.0.1:39281/'}
           target="_blank"
           rel="noopener noreferrer"
           className="p-1.5 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 hover:border-gray-700 rounded-md transition-colors"

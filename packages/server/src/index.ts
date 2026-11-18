@@ -17,6 +17,9 @@ function safeLog(...args: any[]) {
   } catch (_) {}
 }
 
+const isElectron = typeof (process as any).versions?.electron !== 'undefined';
+export const app: FastifyInstance = buildApp({ logger: !isElectron && process.env.NODE_ENV !== 'test' });
+
 export async function startServer(
   port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10),
   host = process.env.HOST || DEFAULT_HOST
@@ -24,9 +27,6 @@ export async function startServer(
   if (serverInstance) {
     return serverInstance;
   }
-
-  const isElectron = typeof (process as any).versions?.electron !== 'undefined';
-  const app = buildApp({ logger: !isElectron && process.env.NODE_ENV !== 'test' });
 
   try {
     await app.listen({ port, host });
@@ -51,9 +51,11 @@ export async function startServer(
 }
 
 // Auto-start when executed as standalone script (CLI or node index.js)
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   startServer().catch(() => {
     // If already running (e.g. spawned previously), log gracefully
     console.log('InternalAPI server already listening or starting.');
   });
 }
+
+export default app;
