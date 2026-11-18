@@ -7,6 +7,18 @@
     },
     "server": {
       "root": "packages/server",
+      "framework": "fastify",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "database-api",
+          "format": "url",
+          "env": "DATABASE_API_URL"
+        }
+      ]
+    },
+    "database-api": {
+      "root": "packages/database-api",
       "framework": "fastify"
     }
   },

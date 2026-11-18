@@ -288,6 +288,33 @@ class LocalFileStorage {
     } catch (e) {
       // ignore in read-only setups
     }
+
+    // Direct Turso cloud sync if configured
+    const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
+    const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
+    if (tursoUrl && tursoToken) {
+      const endpoint = `${tursoUrl.replace(/^libsql:\/\//, 'https://').replace(/\/+$/, '')}/v2/pipeline`;
+      fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tursoToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              type: 'execute',
+              stmt: {
+                sql: `INSERT INTO internalapi_store (id, data, updated_at) VALUES ('main', ?, datetime('now'))
+                      ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at;`,
+                args: [{ type: 'text', value: JSON.stringify(data) }],
+              },
+            },
+            { type: 'close' },
+          ],
+        }),
+      }).catch(() => {});
+    }
   }
 
   // Workspaces
@@ -494,6 +521,17 @@ class LocalFileStorage {
       this.data.history.pop();
     }
     this.saveData(this.data);
+
+    if (process.env.DATABASE_API_URL) {
+      try {
+        fetch(new URL('/data/history', process.env.DATABASE_API_URL), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item),
+        }).catch(() => {});
+      } catch (_) {}
+    }
+
     return item;
   }
 

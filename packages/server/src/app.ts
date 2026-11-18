@@ -260,6 +260,12 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   // Workspaces
   app.get('/api/workspaces', async () => {
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL('/data/workspaces', process.env.DATABASE_API_URL));
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     return db.getWorkspaces();
   });
 
@@ -268,11 +274,27 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!body?.name) {
       throw app.httpErrors.badRequest('Workspace name is required');
     }
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL('/data/workspaces', process.env.DATABASE_API_URL), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     return db.createWorkspace(body.name, body.description);
   });
 
   app.delete('/api/workspaces/:id', async (req) => {
     const { id } = req.params as { id: string };
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL(`/data/workspaces/${id}`, process.env.DATABASE_API_URL), { method: 'DELETE' });
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     const success = db.deleteWorkspace(id);
     return { success };
   });
@@ -302,6 +324,12 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   app.get('/api/environments', async (req) => {
     const query = req.query as { workspaceId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL(`/data/environments?workspaceId=${encodeURIComponent(wsId)}`, process.env.DATABASE_API_URL));
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     return db.getEnvironments(wsId);
   });
 
@@ -310,11 +338,27 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!body?.name) {
       throw app.httpErrors.badRequest('Environment name is required');
     }
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL('/data/environments', process.env.DATABASE_API_URL), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     return db.saveEnvironment(body);
   });
 
   app.delete('/api/environments/:id', async (req) => {
     const { id } = req.params as { id: string };
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL(`/data/environments/${id}`, process.env.DATABASE_API_URL), { method: 'DELETE' });
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     const success = db.deleteEnvironment(id);
     return { success };
   });
@@ -343,6 +387,13 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       }
     }
 
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL(`/data/collections?workspaceId=${encodeURIComponent(wsId)}`, process.env.DATABASE_API_URL));
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
+
     return db.getCollections(wsId);
   });
 
@@ -363,6 +414,16 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
           app.log.warn({ err }, 'Failed to sync saved collection to remote DB');
         }
       }
+    }
+
+    if (process.env.DATABASE_API_URL) {
+      try {
+        await fetch(new URL('/data/collections', process.env.DATABASE_API_URL), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saved),
+        });
+      } catch (_) {}
     }
 
     return saved;
@@ -392,6 +453,12 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     const query = req.query as { workspaceId?: string; limit?: string };
     const wsId = query.workspaceId || 'ws-default-company';
     const limit = query.limit ? parseInt(query.limit, 10) : 50;
+    if (process.env.DATABASE_API_URL) {
+      try {
+        const res = await fetch(new URL(`/data/history?workspaceId=${encodeURIComponent(wsId)}&limit=${limit}`, process.env.DATABASE_API_URL));
+        if (res.ok) return await res.json();
+      } catch (_) {}
+    }
     return db.getHistory(wsId, limit);
   });
 

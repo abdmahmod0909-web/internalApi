@@ -65,7 +65,12 @@ const handler = async function (req: any, res: any) {
   if (req.url && !req.url.startsWith('/api') && req.url !== '/health' && !req.url.startsWith('/health')) {
     req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
   }
-  app.server.emit('request', req, res);
+  return new Promise((resolve, reject) => {
+    res.on('finish', () => resolve(true));
+    res.on('close', () => resolve(true));
+    res.on('error', (err: any) => reject(err));
+    app.server.emit('request', req, res);
+  });
 };
 
 export default Object.assign(handler, app);
