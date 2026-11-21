@@ -167,7 +167,7 @@ export const App: React.FC = () => {
             <TabBar />
 
             {isCollectionTab && activeTab?.collectionId ? (
-              <CollectionSettingsTab collectionId={activeTab.collectionId} />
+              <CollectionSettingsTab key={activeTab.collectionId} collectionId={activeTab.collectionId} />
             ) : (
               /* Resizable Split View: Request Builder & Response Viewer */
               <div

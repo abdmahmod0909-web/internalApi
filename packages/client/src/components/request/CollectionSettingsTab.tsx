@@ -33,8 +33,12 @@ export const CollectionSettingsTab: React.FC<CollectionSettingsTabProps> = ({ co
     return collections.find((c) => c.id === collectionId);
   }, [collections, collectionId]);
 
-  // Local draft state
-  const [colDraft, setColDraft] = useState<Collection | null>(null);
+  // Local draft state initialized immediately from store
+  const [colDraft, setColDraft] = useState<Collection | null>(() => {
+    const col = collections.find((c) => c.id === collectionId);
+    return col ? JSON.parse(JSON.stringify(col)) : null;
+  });
+
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'auth' | 'prereq' | 'tests' | 'variables'>('overview');
   const [descMode, setDescMode] = useState<'write' | 'preview'>('write');
   const [isSaving, setIsSaving] = useState(false);
@@ -47,20 +51,12 @@ export const CollectionSettingsTab: React.FC<CollectionSettingsTabProps> = ({ co
   const [showApiKey, setShowApiKey] = useState(false);
   const [showClientSecret, setShowClientSecret] = useState(false);
 
-  // Sync draft from original collection
+  // Sync draft when original collection changes in store
   useEffect(() => {
     if (originalCollection) {
       setColDraft(JSON.parse(JSON.stringify(originalCollection)));
     }
-  }, [originalCollection?.id]);
-
-  if (!originalCollection || !colDraft) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">
-        Collection not found or has been deleted.
-      </div>
-    );
-  }
+  }, [originalCollection]);
 
   // Dirty check
   const isDirty = useMemo(() => {
@@ -89,7 +85,15 @@ export const CollectionSettingsTab: React.FC<CollectionSettingsTabProps> = ({ co
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [colDraft]);
+  }, [colDraft, userPerms.canEdit]);
+
+  if (!originalCollection || !colDraft) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-500 text-xs">
+        Collection not found or has been deleted.
+      </div>
+    );
+  }
 
   const handleCopyId = () => {
     if (navigator?.clipboard) {
