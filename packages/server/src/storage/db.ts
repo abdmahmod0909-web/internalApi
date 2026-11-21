@@ -538,6 +538,9 @@ class LocalFileStorage {
                 requests: extra.requests || [],
                 auth: extra.auth,
                 variables: extra.variables,
+                collectionVariables: extra.collectionVariables,
+                preScript: extra.preScript,
+                postScript: extra.postScript,
               };
             });
           }
@@ -850,18 +853,39 @@ class LocalFileStorage {
     return false;
   }
 
-  getResolvedVariables(environmentId?: string): Record<string, string> {
+  getResolvedVariables(environmentId?: string, collectionId?: string): Record<string, string> {
     const vars: Record<string, string> = {};
-    if (!environmentId) return vars;
 
-    const env = this.data.environments.find((e) => e.id === environmentId);
-    if (!env) return vars;
-
-    for (const v of env.variables) {
-      if (v.isEnabled && v.key) {
-        vars[v.key] = v.isSecret ? decryptSecret(v.value) : v.value;
+    // 1. Resolve Collection Variables first (lower precedence)
+    if (collectionId) {
+      const col = this.getCollection(collectionId);
+      if (col) {
+        if (Array.isArray(col.collectionVariables)) {
+          for (const cv of col.collectionVariables) {
+            if (cv.isEnabled !== false && cv.key) {
+              vars[cv.key] = cv.isSecret ? decryptSecret(cv.value) : (cv.currentValue || cv.value);
+            }
+          }
+        } else if (col.variables) {
+          for (const [k, v] of Object.entries(col.variables)) {
+            vars[k] = String(v);
+          }
+        }
       }
     }
+
+    // 2. Resolve Environment Variables (higher precedence, overrides collection)
+    if (environmentId) {
+      const env = this.data.environments.find((e) => e.id === environmentId);
+      if (env) {
+        for (const v of env.variables) {
+          if (v.isEnabled && v.key) {
+            vars[v.key] = v.isSecret ? decryptSecret(v.value) : v.value;
+          }
+        }
+      }
+    }
+
     return vars;
   }
 

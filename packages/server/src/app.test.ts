@@ -458,4 +458,81 @@ describe('Fastify Server Integration Tests', () => {
       expect(delUser.statusCode).toBe(200);
     });
   });
+
+  describe('Postman Collection Settings (Overview, Auth, Scripts, Variables)', () => {
+    const colId = 'col-postman-settings-test';
+
+    it('saves a collection with overview, auth, preScript, postScript, and collectionVariables', async () => {
+      const saveRes = await app.inject({
+        method: 'POST',
+        url: '/api/collections',
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          id: colId,
+          workspaceId: 'ws-default-company',
+          name: 'Postman Integration Collection',
+          description: '# E-Commerce Service\nFull suite of payments and inventory endpoints.',
+          auth: {
+            type: 'bearer',
+            bearer: { token: 'jwt-col-token-xyz' },
+          },
+          preScript: 'pm.collectionVariables.set("apiVersion", "v2");',
+          postScript: 'pm.test("Status is 200", () => { pm.response.to.have.status(200); });',
+          collectionVariables: [
+            {
+              id: 'var-1',
+              key: 'baseUrl',
+              value: 'https://shop.example.com',
+              isEnabled: true,
+            },
+            {
+              id: 'var-2',
+              key: 'apiKey',
+              value: 'secret-key-123',
+              isSecret: true,
+              isEnabled: true,
+            },
+          ],
+          sortOrder: 0,
+          folders: [],
+          requests: [],
+        },
+      });
+
+      expect(saveRes.statusCode).toBe(200);
+      const saved = JSON.parse(saveRes.payload);
+      expect(saved.id).toBe(colId);
+      expect(saved.name).toBe('Postman Integration Collection');
+      expect(saved.auth?.type).toBe('bearer');
+      expect(saved.auth?.bearer?.token).toBe('jwt-col-token-xyz');
+      expect(saved.preScript).toContain('apiVersion');
+      expect(saved.postScript).toContain('Status is 200');
+      expect(saved.collectionVariables.length).toBe(2);
+    });
+
+    it('fetches the saved collection and preserves all collection settings', async () => {
+      const getRes = await app.inject({
+        method: 'GET',
+        url: '/api/collections?workspaceId=ws-default-company',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(getRes.statusCode).toBe(200);
+      const cols = JSON.parse(getRes.payload);
+      const found = cols.find((c: any) => c.id === colId);
+      expect(found).toBeDefined();
+      expect(found.description).toContain('E-Commerce Service');
+      expect(found.auth?.bearer?.token).toBe('jwt-col-token-xyz');
+      expect(found.collectionVariables[0].key).toBe('baseUrl');
+    });
+
+    it('cleans up test collection', async () => {
+      const delRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/collections/${colId}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(delRes.statusCode).toBe(200);
+    });
+  });
 });

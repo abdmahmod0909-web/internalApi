@@ -556,7 +556,7 @@ export const RequestBuilder: React.FC = () => {
             <div>
               <label className="block text-gray-400 mb-1 font-medium">Type</label>
               <select
-                value={req.auth?.type || 'none'}
+                value={req.auth?.type || (req.collectionId ? 'inherit' : 'none')}
                 onChange={(e) =>
                   updateActiveRequest((prev) => ({
                     ...prev,
@@ -565,6 +565,7 @@ export const RequestBuilder: React.FC = () => {
                 }
                 className="bg-gray-900 border border-gray-700 rounded px-2.5 py-1.5 text-gray-200 outline-none w-full"
               >
+                <option value="inherit">Inherit auth from parent</option>
                 <option value="none">No Auth</option>
                 <option value="bearer">Bearer Token</option>
                 <option value="basic">Basic Auth</option>
@@ -573,6 +574,28 @@ export const RequestBuilder: React.FC = () => {
                 <option value="custom">Custom Header</option>
               </select>
             </div>
+
+            {(!req.auth?.type || req.auth.type === 'inherit') && (
+              <div className="p-3 bg-gray-900/80 border border-gray-800 rounded-lg text-gray-300">
+                <div className="flex items-center space-x-2 text-orange-400 font-medium mb-1">
+                  <Folder className="w-4 h-4 shrink-0" />
+                  <span>Inherit Authorization from Parent</span>
+                </div>
+                {req.collectionId ? (
+                  <p className="text-gray-400 leading-relaxed">
+                    This request inherits its authorization from collection{' '}
+                    <strong className="text-white">
+                      {collections.find((c) => c.id === req.collectionId)?.name || 'Parent Collection'}
+                    </strong>{' '}
+                    ({collections.find((c) => c.id === req.collectionId)?.auth?.type || 'No Auth'}).
+                  </p>
+                ) : (
+                  <p className="text-gray-400 leading-relaxed">
+                    This request is not assigned to a collection yet. Assign or save this request to a collection to inherit its authorization.
+                  </p>
+                )}
+              </div>
+            )}
 
             {req.auth?.type === 'bearer' && (
               <div>

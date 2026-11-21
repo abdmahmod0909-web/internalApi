@@ -1,7 +1,61 @@
-import type { Collection, Folder, ApiRequestData, HttpMethod, KeyValueItem, FormDataItem } from './types/index.js';
+import type { Collection, Folder, ApiRequestData, HttpMethod, KeyValueItem, FormDataItem, AuthConfig, CollectionVariable } from './types/index.js';
 
 export function isPostmanCollection(json: any): boolean {
   return json && (json.info?.schema?.includes('collection.json') || (json.info?.name && Array.isArray(json.item)));
+}
+
+/**
+ * Parses Postman Auth object into InternalAPI AuthConfig.
+ */
+function parsePostmanAuth(authObj: any): AuthConfig {
+  if (!authObj || !authObj.type) return { type: 'none' };
+  const type = authObj.type;
+  if (type === 'bearer') {
+    const arr = Array.isArray(authObj.bearer) ? authObj.bearer : [];
+    const tokenItem = arr.find((i: any) => i.key === 'token');
+    return {
+      type: 'bearer',
+      bearer: { token: tokenItem?.value || '' },
+    };
+  }
+  if (type === 'basic') {
+    const arr = Array.isArray(authObj.basic) ? authObj.basic : [];
+    const userItem = arr.find((i: any) => i.key === 'username');
+    const passItem = arr.find((i: any) => i.key === 'password');
+    return {
+      type: 'basic',
+      basic: { username: userItem?.value || '', password: passItem?.value || '' },
+    };
+  }
+  if (type === 'apikey') {
+    const arr = Array.isArray(authObj.apikey) ? authObj.apikey : [];
+    const keyItem = arr.find((i: any) => i.key === 'key');
+    const valItem = arr.find((i: any) => i.key === 'value');
+    const inItem = arr.find((i: any) => i.key === 'in');
+    return {
+      type: 'apikey',
+      apiKey: {
+        key: keyItem?.value || '',
+        value: valItem?.value || '',
+        addTo: inItem?.value === 'query' ? 'query' : 'header',
+      },
+    };
+  }
+  if (type === 'oauth2') {
+    const arr = Array.isArray(authObj.oauth2) ? authObj.oauth2 : [];
+    const getVal = (k: string) => arr.find((i: any) => i.key === k)?.value || '';
+    return {
+      type: 'oauth2',
+      oauth2: {
+        grantType: 'client_credentials',
+        tokenUrl: getVal('accessTokenUrl'),
+        clientId: getVal('clientId'),
+        clientSecret: getVal('clientSecret'),
+        scope: getVal('scope'),
+      },
+    };
+  }
+  return { type: 'none' };
 }
 
 /**
@@ -177,11 +231,58 @@ export function importPostmanCollection(postmanJson: any, workspaceId: string): 
     }
   }
 
+  // Collection-level events (pre-request and test scripts)
+  let preScript = '';
+  let postScript = '';
+  if (Array.isArray(postmanJson.event)) {
+    for (const evt of postmanJson.event) {
+      const scriptCode = Array.isArray(evt.script?.exec) ? evt.script.exec.join('\n') : evt.script?.exec || '';
+      if (evt.listen === 'prerequest') {
+        preScript = scriptCode;
+      } else if (evt.listen === 'test') {
+        postScript = scriptCode;
+      }
+    }
+  }
+
+  // Collection variables
+  const collectionVariables: CollectionVariable[] = [];
+  const variablesMap: Record<string, string> = {};
+  if (Array.isArray(postmanJson.variable)) {
+    for (const v of postmanJson.variable) {
+      if (v.key) {
+        collectionVariables.push({
+          id: `var-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          key: v.key,
+          value: v.value || '',
+          currentValue: v.value || '',
+          isSecret: v.type === 'secret',
+          isEnabled: !v.disabled,
+          description: v.description,
+        });
+        if (!v.disabled) {
+          variablesMap[v.key] = v.value || '';
+        }
+      }
+    }
+  }
+
+  // Collection Auth
+  let auth: AuthConfig | undefined = undefined;
+  if (postmanJson.auth) {
+    auth = parsePostmanAuth(postmanJson.auth);
+  }
+
   return {
     id: collectionId,
     workspaceId,
     name,
     description,
+    auth,
+    variables: variablesMap,
+    collectionVariables,
+    preScript,
+    postScript,
     sortOrder: 0,
     folders,
     requests: directRequests,

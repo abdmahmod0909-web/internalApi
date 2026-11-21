@@ -41,17 +41,52 @@ export function exportPostmanCollection(
 
   // 3. Convert Variables
   const variables: any[] = [];
-  if (options.includeVariables && collection.variables) {
-    for (const [key, value] of Object.entries(collection.variables)) {
-      variables.push({
-        key,
-        value,
-        type: 'string',
-      });
+  if (options.includeVariables) {
+    if (Array.isArray(collection.collectionVariables)) {
+      for (const cv of collection.collectionVariables) {
+        if (cv.key) {
+          variables.push({
+            key: cv.key,
+            value: cv.value || '',
+            type: cv.isSecret ? 'secret' : 'string',
+            disabled: cv.isEnabled === false,
+            description: cv.description || '',
+          });
+        }
+      }
+    } else if (collection.variables) {
+      for (const [key, value] of Object.entries(collection.variables)) {
+        variables.push({
+          key,
+          value,
+          type: 'string',
+        });
+      }
     }
   }
 
-  // 4. Convert Collection Auth (if any)
+  // 4. Convert Collection Scripts (event)
+  const collectionEvents: any[] = [];
+  if (collection.preScript && collection.preScript.trim()) {
+    collectionEvents.push({
+      listen: 'prerequest',
+      script: {
+        type: 'text/javascript',
+        exec: collection.preScript.split('\n'),
+      },
+    });
+  }
+  if (collection.postScript && collection.postScript.trim()) {
+    collectionEvents.push({
+      listen: 'test',
+      script: {
+        type: 'text/javascript',
+        exec: collection.postScript.split('\n'),
+      },
+    });
+  }
+
+  // 5. Convert Collection Auth (if any)
   let authObj: any = undefined;
   if (collection.auth && collection.auth.type !== 'none') {
     authObj = convertAuthToPostman(collection.auth);
@@ -66,6 +101,7 @@ export function exportPostmanCollection(
       _exporter_id: 'internalapi-client',
     },
     item: postmanItems,
+    event: collectionEvents.length > 0 ? collectionEvents : undefined,
     auth: authObj,
     variable: variables.length > 0 ? variables : undefined,
   };

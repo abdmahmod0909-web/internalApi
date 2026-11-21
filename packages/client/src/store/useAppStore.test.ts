@@ -186,5 +186,43 @@ describe('Client Zustand Store', () => {
     await store.deleteCollection('col-protected');
     expect(useAppStore.getState().collections.some((c) => c.id === 'col-protected')).toBe(true);
   });
+
+  it('manages collection settings tab and collection-level configurations', async () => {
+    const store = useAppStore.getState();
+
+    const testCol = {
+      id: 'col-settings-test',
+      workspaceId: 'ws-default-company',
+      name: 'E-Commerce API',
+      description: 'API for orders and payments',
+      auth: { type: 'bearer' as const, bearer: { token: 'secret-token-123' } },
+      preScript: 'pm.collectionVariables.set("base_path", "/api/v2");',
+      postScript: 'pm.test("Status is 200", () => { pm.response.to.have.status(200); });',
+      collectionVariables: [
+        { id: 'var-1', key: 'base_url', value: 'https://api.shop.com', isEnabled: true },
+      ],
+      sortOrder: 0,
+      folders: [],
+      requests: [],
+    };
+
+    useAppStore.setState({
+      collections: [testCol],
+    });
+
+    // Open collection settings tab
+    store.openCollectionTab('col-settings-test');
+
+    const tabsAfter = useAppStore.getState().tabs;
+    const colTab = tabsAfter.find((t) => t.type === 'collection' && t.collectionId === 'col-settings-test');
+    expect(colTab).toBeDefined();
+    expect(colTab?.name).toBe('E-Commerce API');
+    expect(useAppStore.getState().activeTabId).toBe(colTab?.id);
+
+    // Opening it again switches to existing tab without duplicate
+    store.openCollectionTab('col-settings-test');
+    const tabsCount = useAppStore.getState().tabs.filter((t) => t.type === 'collection' && t.collectionId === 'col-settings-test').length;
+    expect(tabsCount).toBe(1);
+  });
 });
 

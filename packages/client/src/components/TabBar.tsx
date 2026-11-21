@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore.js';
 import {
   Plus,
   X,
+  Folder,
   Columns,
   Rows,
   ChevronLeft,
@@ -284,6 +285,7 @@ export const TabBar: React.FC = () => {
         >
           {tabs.map((tab) => {
             const isActive = tab.id === activeTabId;
+            const isColTab = tab.type === 'collection';
             const methodColor = getMethodBadgeColor(tab.request.method);
 
             return (
@@ -296,12 +298,16 @@ export const TabBar: React.FC = () => {
                     ? 'bg-gray-900 text-white border-orange-500 font-medium'
                     : 'text-gray-400 border-transparent hover:bg-gray-900/60 hover:text-gray-200'
                 }`}
-                title={tab.name || tab.request.url || 'Untitled Request'}
+                title={tab.name || (isColTab ? 'Collection Settings' : tab.request.url || 'Untitled Request')}
               >
-                <span className={`text-[10px] font-bold ${methodColor} shrink-0`}>
-                  {tab.request.method}
-                </span>
-                <span className="truncate">{tab.name || tab.request.url || 'Untitled Request'}</span>
+                {isColTab ? (
+                  <Folder className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                ) : (
+                  <span className={`text-[10px] font-bold ${methodColor} shrink-0`}>
+                    {tab.request.method}
+                  </span>
+                )}
+                <span className="truncate">{tab.name || (isColTab ? 'Untitled Collection' : tab.request.url || 'Untitled Request')}</span>
                 {tab.isDirty && (
                   <span
                     className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0"

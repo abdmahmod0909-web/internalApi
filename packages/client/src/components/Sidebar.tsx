@@ -21,6 +21,9 @@ import {
   Sparkles,
   Download,
   Lock,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  SlidersHorizontal,
 } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
@@ -75,6 +78,7 @@ export const Sidebar: React.FC = () => {
     collections,
     history,
     openTab,
+    openCollectionTab,
     createCollection,
     deleteCollection,
     renameCollection,
@@ -182,6 +186,41 @@ export const Sidebar: React.FC = () => {
       renameRequestInCollection(colId, folderId, reqId, editingReqName.trim());
     }
     setEditingReqId(null);
+  };
+
+  // Collapse / Expand All Collections & Folders in Sidebar
+  const isAllCollapsed =
+    collections.length > 0 &&
+    collections.every((c) => collapsedFolders[c.id]) &&
+    collections.every((c) => (c.folders || []).every((f) => collapsedFolders[f.id]));
+
+  const toggleCollapseAll = () => {
+    if (isAllCollapsed) {
+      setCollapsedFolders({});
+    } else {
+      const next: Record<string, boolean> = {};
+      for (const c of collections) {
+        next[c.id] = true;
+        for (const f of c.folders || []) {
+          next[f.id] = true;
+        }
+      }
+      setCollapsedFolders(next);
+    }
+  };
+
+  // Collapse / Expand all folders in a specific collection
+  const toggleCollapseCollectionFolders = (colId: string) => {
+    const col = collections.find((c) => c.id === colId);
+    if (!col || !col.folders || col.folders.length === 0) return;
+    const allColFoldersCollapsed = col.folders.every((f) => collapsedFolders[f.id]);
+    setCollapsedFolders((prev) => {
+      const next = { ...prev };
+      for (const f of col.folders) {
+        next[f.id] = !allColFoldersCollapsed;
+      }
+      return next;
+    });
   };
 
   const requestMatches = (req: any, q: string) => {
@@ -445,16 +484,27 @@ export const Sidebar: React.FC = () => {
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
               <span>Collections ({isSearching ? `${filteredCollections.length} of ${collections.length}` : collections.length})</span>
-              {userPerms.canAdd && (
-                <button
-                  onClick={handleCreateCollection}
-                  className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
-                  title="Create New Collection"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New</span>
-                </button>
-              )}
+              <div className="flex items-center space-x-1">
+                {collections.length > 0 && (
+                  <button
+                    onClick={toggleCollapseAll}
+                    className="p-1 hover:text-orange-400 hover:bg-gray-900 text-gray-400 rounded transition-colors"
+                    title={isAllCollapsed ? 'Expand all collections & folders' : 'Collapse all collections & folders'}
+                  >
+                    {isAllCollapsed ? <ChevronsUpDown className="w-3.5 h-3.5" /> : <ChevronsDownUp className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+                {userPerms.canAdd && (
+                  <button
+                    onClick={handleCreateCollection}
+                    className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
+                    title="Create New Collection"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Inline New Collection Input */}
@@ -552,7 +602,10 @@ export const Sidebar: React.FC = () => {
                     <div className="group flex items-center justify-between px-2 py-1.5 text-xs text-gray-300 hover:bg-gray-900 rounded cursor-pointer transition-colors">
                       <div
                         className="flex items-center space-x-1.5 flex-1 min-w-0"
-                        onClick={() => toggleFolder(col.id)}
+                        onClick={() => {
+                          toggleFolder(col.id);
+                          openCollectionTab(col.id);
+                        }}
                       >
                         {isColOpen ? (
                           <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
@@ -565,6 +618,28 @@ export const Sidebar: React.FC = () => {
 
                       {/* Quick action buttons on collection row */}
                       <div className="flex items-center space-x-0.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                        {col.folders && col.folders.length > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleCollapseCollectionFolders(col.id);
+                            }}
+                            className="p-1 hover:text-amber-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                            title="Collapse/expand all folders in this collection"
+                          >
+                            <ChevronsDownUp className="w-3.5 h-3.5 text-gray-400 hover:text-amber-400" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCollectionTab(col.id);
+                          }}
+                          className="p-1 hover:text-orange-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                          title="Collection Settings (Overview, Auth, Scripts, Variables)"
+                        >
+                          <SlidersHorizontal className="w-3 h-3 text-orange-400" />
+                        </button>
                         {userPerms.canAdd && (
                           <button
                             onClick={(e) => {

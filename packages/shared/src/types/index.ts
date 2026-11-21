@@ -2,7 +2,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 
 
 export type BodyType = 'none' | 'json' | 'raw' | 'form-data' | 'x-www-form-urlencoded' | 'graphql';
 
-export type AuthType = 'none' | 'bearer' | 'basic' | 'apikey' | 'oauth2' | 'custom';
+export type AuthType = 'inherit' | 'none' | 'bearer' | 'basic' | 'apikey' | 'oauth2' | 'custom';
 
 export interface KeyValueItem {
   id: string;
@@ -162,6 +162,16 @@ export interface Folder {
   children?: Folder[];
 }
 
+export interface CollectionVariable {
+  id: string;
+  key: string;
+  value: string;
+  currentValue?: string;
+  isSecret?: boolean;
+  isEnabled?: boolean;
+  description?: string;
+}
+
 export interface Collection {
   id: string;
   workspaceId: string;
@@ -169,9 +179,14 @@ export interface Collection {
   description?: string;
   auth?: AuthConfig;
   variables?: Record<string, string>;
+  collectionVariables?: CollectionVariable[];
+  preScript?: string;
+  postScript?: string;
   sortOrder: number;
   folders: Folder[];
   requests: ApiRequestData[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Workspace {

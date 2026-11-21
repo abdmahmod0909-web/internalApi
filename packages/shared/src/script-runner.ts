@@ -7,12 +7,14 @@ export interface TestResultItem {
 export interface ScriptExecutionResult {
   tests: TestResultItem[];
   environmentMutations: Record<string, string>;
+  collectionMutations: Record<string, string>;
   logs: string[];
 }
 
 export interface ScriptContext {
   environment: Record<string, string>;
   variables: Record<string, string>;
+  collectionVariables?: Record<string, string>;
   request: {
     url: string;
     method: string;
@@ -111,15 +113,17 @@ function createExpect(actual: any, isNegated = false) {
  */
 export function executeScript(script: string, context: ScriptContext): ScriptExecutionResult {
   if (!script || !script.trim()) {
-    return { tests: [], environmentMutations: {}, logs: [] };
+    return { tests: [], environmentMutations: {}, collectionMutations: {}, logs: [] };
   }
 
   const tests: TestResultItem[] = [];
   const environmentMutations: Record<string, string> = {};
+  const collectionMutations: Record<string, string> = {};
   const logs: string[] = [];
 
   // Working copies of variables
   const envVars = { ...context.environment };
+  const colVars = { ...(context.collectionVariables || {}) };
   const localVars = { ...context.variables };
 
   // Response object helpers
@@ -147,8 +151,22 @@ export function executeScript(script: string, context: ScriptContext): ScriptExe
       has: (key: string) => Object.prototype.hasOwnProperty.call(envVars, key),
     },
 
+    collectionVariables: {
+      get: (key: string) => colVars[key],
+      set: (key: string, value: any) => {
+        const valStr = String(value);
+        colVars[key] = valStr;
+        collectionMutations[key] = valStr;
+      },
+      unset: (key: string) => {
+        delete colVars[key];
+        collectionMutations[key] = '';
+      },
+      has: (key: string) => Object.prototype.hasOwnProperty.call(colVars, key),
+    },
+
     variables: {
-      get: (key: string) => localVars[key] ?? envVars[key],
+      get: (key: string) => localVars[key] ?? envVars[key] ?? colVars[key],
       set: (key: string, value: any) => {
         localVars[key] = String(value);
       },
@@ -218,6 +236,7 @@ export function executeScript(script: string, context: ScriptContext): ScriptExe
   return {
     tests,
     environmentMutations,
+    collectionMutations,
     logs,
   };
 }

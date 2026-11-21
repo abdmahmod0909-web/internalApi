@@ -587,12 +587,21 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     }
 
     const wsId = body.workspaceId || 'ws-default-company';
+    const collectionId = body.request.collectionId || (body as any).collectionId;
 
     // 1. Resolve Variables: Environment overrides Collection
-    const resolvedVars = db.getResolvedVariables(body.environmentId);
+    const resolvedVars = db.getResolvedVariables(body.environmentId, collectionId);
 
     // 2. Deeply interpolate all template strings in the request
-    const effectiveRequest: ApiRequestData = interpolateDeep(body.request, resolvedVars);
+    let effectiveRequest: ApiRequestData = interpolateDeep(body.request, resolvedVars);
+
+    // 3. Inherit Auth from parent collection if requested
+    if ((!effectiveRequest.auth || effectiveRequest.auth.type === 'inherit' || effectiveRequest.auth.type === 'none') && collectionId) {
+      const col = db.getCollection(collectionId);
+      if (col?.auth && col.auth.type !== 'none' && (!effectiveRequest.auth || effectiveRequest.auth.type === 'inherit')) {
+        effectiveRequest.auth = col.auth;
+      }
+    }
 
     try {
       // 3. Execute via backend proxy

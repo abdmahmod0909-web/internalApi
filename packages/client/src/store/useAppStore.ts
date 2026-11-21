@@ -17,6 +17,7 @@ import type {
   User,
   UserRole,
   UserPermissions,
+  CollectionVariable,
 } from '@internalapi/shared';
 import { executeScript, interpolateVariables, resolveUserPermissions } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
@@ -24,6 +25,8 @@ import { downloadCollectionAsJson } from '../utils/export-collection.js';
 export interface TabItem {
   id: string;
   name: string;
+  type?: 'request' | 'collection';
+  collectionId?: string;
   request: ApiRequestData;
   isDirty: boolean;
   isLoading: boolean;
@@ -167,6 +170,8 @@ interface AppState {
   stopFlow: () => void;
 
   openTab: (request?: Partial<ApiRequestData>, customId?: string) => void;
+  openCollectionTab: (collectionId: string) => void;
+  saveCollectionSettings: (col: Collection) => Promise<boolean>;
   closeTab: (tabId: string) => void;
   closeTabs: (tabIds: string[]) => void;
   duplicateTab: (tabId: string) => void;
@@ -810,6 +815,77 @@ export const useAppStore = create<AppState>((set, get) => ({
     setStoredItem('internalapi_active_tab_id', tabId);
   },
 
+  openCollectionTab: (collectionId: string) => {
+    const { tabs, collections } = get();
+    const col = collections.find((c) => c.id === collectionId);
+    if (!col) return;
+
+    const existingTab = tabs.find((t) => t.type === 'collection' && t.collectionId === collectionId);
+    if (existingTab) {
+      set({ activeTabId: existingTab.id });
+      setStoredItem('internalapi_active_tab_id', existingTab.id);
+      return;
+    }
+
+    const tabId = `col-tab-${collectionId}`;
+    const newTab: TabItem = {
+      id: tabId,
+      name: col.name,
+      type: 'collection',
+      collectionId: col.id,
+      request: { ...DEFAULT_NEW_REQUEST, name: col.name, collectionId: col.id },
+      isDirty: false,
+      isLoading: false,
+    };
+
+    const nextTabs = [...tabs, newTab];
+    set({ tabs: nextTabs, activeTabId: tabId });
+    setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
+    setStoredItem('internalapi_active_tab_id', tabId);
+  },
+
+  saveCollectionSettings: async (col: Collection) => {
+    const { collections, tabs, getUserPermissions } = get();
+    const perms = getUserPermissions();
+    if (!perms.canEdit) {
+      alert('Action blocked: you do not have permission to edit collections.');
+      return false;
+    }
+
+    try {
+      const res = await apiFetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(col),
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || 'Failed to save collection');
+      }
+
+      const saved: Collection = await res.json();
+      const updatedCols = collections.map((c) => (c.id === saved.id ? saved : c));
+
+      // Update tab dirty state and name
+      const updatedTabs = tabs.map((t) => {
+        if (t.type === 'collection' && t.collectionId === saved.id) {
+          return { ...t, name: saved.name, isDirty: false };
+        }
+        return t;
+      });
+
+      set({ collections: updatedCols, tabs: updatedTabs });
+      setStoredItem('internalapi_collections', JSON.stringify(updatedCols));
+      setStoredItem('internalapi_tabs', JSON.stringify(updatedTabs));
+      return true;
+    } catch (err: any) {
+      console.error('Failed to save collection:', err);
+      alert(err.message || 'Failed to save collection');
+      return false;
+    }
+  },
+
   closeTab: (tabId) => {
     const { tabs, activeTabId } = get();
     if (tabs.length === 1) {
@@ -950,7 +1026,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   sendRequest: async (targetTabId) => {
-    const { tabs, activeTabId, activeEnvironmentId, activeWorkspaceId, environments, saveEnvironment } = get();
+    const { tabs, activeTabId, activeEnvironmentId, activeWorkspaceId, environments, collections, saveEnvironment, saveCollectionSettings } = get();
     const tabId = targetTabId || activeTabId;
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
@@ -983,18 +1059,80 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    // 1. Run Pre-request Script if defined
+    // Resolve parent collection (for collection pre/post script, collection variables, inherited auth)
+    const parentCol = tab.request.collectionId ? collections.find((c) => c.id === tab.request.collectionId) : undefined;
+    const colVars: Record<string, string> = {};
+    if (parentCol) {
+      if (Array.isArray(parentCol.collectionVariables)) {
+        for (const cv of parentCol.collectionVariables) {
+          if (cv.isEnabled !== false && cv.key) colVars[cv.key] = cv.value;
+        }
+      } else if (parentCol.variables) {
+        for (const [k, v] of Object.entries(parentCol.variables)) {
+          colVars[k] = String(v);
+        }
+      }
+    }
+
+    const requestHeaders = (tab.request.headers || []).reduce((acc, h) => {
+      if (h.isEnabled && h.key) acc[h.key] = h.value;
+      return acc;
+    }, {} as Record<string, string>);
+
+    // 1a. Run Collection Pre-request Script first if defined
+    if (parentCol?.preScript) {
+      const colPreResult = executeScript(parentCol.preScript, {
+        environment: envVars,
+        variables: {},
+        collectionVariables: colVars,
+        request: {
+          url: tab.request.url,
+          method: tab.request.method,
+          headers: requestHeaders,
+          body: tab.request.bodyContent,
+        },
+      });
+
+      if (activeEnv && Object.keys(colPreResult.environmentMutations).length > 0) {
+        const updatedVars = [...activeEnv.variables];
+        for (const [k, val] of Object.entries(colPreResult.environmentMutations)) {
+          const strVal = String(val);
+          const idx = updatedVars.findIndex((v) => v.key === k);
+          if (idx >= 0) {
+            updatedVars[idx] = { ...updatedVars[idx], value: strVal };
+          } else {
+            updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
+          }
+        }
+        saveEnvironment({ ...activeEnv, variables: updatedVars });
+      }
+
+      if (Object.keys(colPreResult.collectionMutations).length > 0) {
+        const currentVars: CollectionVariable[] = Array.isArray(parentCol.collectionVariables) ? [...parentCol.collectionVariables] : [];
+        for (const [k, val] of Object.entries(colPreResult.collectionMutations)) {
+          const strVal = String(val);
+          colVars[k] = strVal;
+          const idx = currentVars.findIndex((v) => v.key === k);
+          if (idx >= 0) {
+            currentVars[idx] = { ...currentVars[idx], currentValue: strVal };
+          } else {
+            currentVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, currentValue: strVal, isSecret: false, isEnabled: true });
+          }
+        }
+        saveCollectionSettings({ ...parentCol, collectionVariables: currentVars });
+      }
+    }
+
+    // 1b. Run Request Pre-request Script if defined
     if (tab.request.preScript) {
       const preResult = executeScript(tab.request.preScript, {
         environment: envVars,
         variables: {},
+        collectionVariables: colVars,
         request: {
           url: tab.request.url,
           method: tab.request.method,
-          headers: (tab.request.headers || []).reduce((acc, h) => {
-            if (h.isEnabled && h.key) acc[h.key] = h.value;
-            return acc;
-          }, {} as Record<string, string>),
+          headers: requestHeaders,
           body: tab.request.bodyContent,
         },
       });
@@ -1013,6 +1151,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         saveEnvironment({ ...activeEnv, variables: updatedVars });
       }
+
+      // Apply collection variables updates
+      if (parentCol && Object.keys(preResult.collectionMutations).length > 0) {
+        const currentVars: CollectionVariable[] = Array.isArray(parentCol.collectionVariables) ? [...parentCol.collectionVariables] : [];
+        for (const [k, val] of Object.entries(preResult.collectionMutations)) {
+          const strVal = String(val);
+          colVars[k] = strVal;
+          const idx = currentVars.findIndex((v) => v.key === k);
+          if (idx >= 0) {
+            currentVars[idx] = { ...currentVars[idx], currentValue: strVal };
+          } else {
+            currentVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, currentValue: strVal, isSecret: false, isEnabled: true });
+          }
+        }
+        saveCollectionSettings({ ...parentCol, collectionVariables: currentVars });
+      }
+    }
+
+    // 1c. Resolve inherited auth if requested
+    let effectiveRequest = { ...tab.request };
+    if ((!effectiveRequest.auth || effectiveRequest.auth.type === 'inherit' || effectiveRequest.auth.type === 'none') && parentCol?.auth && parentCol.auth.type !== 'none' && (!effectiveRequest.auth || effectiveRequest.auth.type === 'inherit')) {
+      effectiveRequest = { ...effectiveRequest, auth: parentCol.auth };
     }
 
     try {
@@ -1020,7 +1180,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          request: tab.request,
+          request: effectiveRequest,
           environmentId: activeEnvironmentId,
           workspaceId: activeWorkspaceId,
         }),
@@ -1049,21 +1209,43 @@ export const useAppStore = create<AppState>((set, get) => ({
         throw new Error(`Failed to parse backend response: ${jsonErr.message}`);
       }
 
-      // 2. Run Tests / Post-response Script if defined
+      // 2. Run Tests / Post-response Script if defined (Collection test script + Request test script)
       let testResults: TestResultItem[] = [];
       let scriptLogs: string[] = [];
 
+      // 2a. Run Collection Tests Script
+      if (parentCol?.postScript && responseData) {
+        const colPostResult = executeScript(parentCol.postScript, {
+          environment: envVars,
+          variables: {},
+          collectionVariables: colVars,
+          request: {
+            url: tab.request.url,
+            method: tab.request.method,
+            headers: requestHeaders,
+          },
+          response: {
+            status: responseData.status,
+            statusText: responseData.statusText,
+            headers: responseData.headers,
+            body: responseData.body,
+            time: responseData.time,
+          },
+        });
+        testResults.push(...colPostResult.tests);
+        scriptLogs.push(...colPostResult.logs);
+      }
+
+      // 2b. Run Request Tests Script
       if (tab.request.postScript && responseData) {
         const postResult = executeScript(tab.request.postScript, {
           environment: envVars,
           variables: {},
+          collectionVariables: colVars,
           request: {
             url: tab.request.url,
             method: tab.request.method,
-            headers: (tab.request.headers || []).reduce((acc, h) => {
-              if (h.isEnabled && h.key) acc[h.key] = h.value;
-              return acc;
-            }, {} as Record<string, string>),
+            headers: requestHeaders,
           },
           response: {
             status: responseData.status,
@@ -1074,8 +1256,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
         });
 
-        testResults = postResult.tests;
-        scriptLogs = postResult.logs;
+        testResults.push(...postResult.tests);
+        scriptLogs.push(...postResult.logs);
 
         // Apply environment updates from tests script
         if (activeEnv && Object.keys(postResult.environmentMutations).length > 0) {
@@ -1161,9 +1343,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveCurrentRequest: async (collectionId, folderId) => {
-    const { tabs, activeTabId, collections } = get();
+    const { tabs, activeTabId, collections, saveCollectionSettings } = get();
     const activeTab = tabs.find((t) => t.id === activeTabId);
     if (!activeTab) return;
+
+    if (activeTab.type === 'collection' && activeTab.collectionId) {
+      const col = collections.find((c) => c.id === activeTab.collectionId);
+      if (col) {
+        await saveCollectionSettings(col);
+      }
+      return;
+    }
 
     const req = activeTab.request;
     const colId = collectionId || req.collectionId || collections[0]?.id;
@@ -1220,9 +1410,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveTabRequest: async (tabId, collectionId, folderId) => {
-    const { tabs, collections } = get();
+    const { tabs, collections, saveCollectionSettings } = get();
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return false;
+
+    if (tab.type === 'collection' && tab.collectionId) {
+      const col = collections.find((c) => c.id === tab.collectionId);
+      if (col) {
+        return saveCollectionSettings(col);
+      }
+      return false;
+    }
 
     let targetCollections = [...collections];
     let colId = collectionId || tab.request.collectionId;

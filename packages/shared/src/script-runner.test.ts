@@ -53,5 +53,27 @@ describe('Postman-compatible pm script runner', () => {
     expect(result.tests[0].passed).toBe(false);
     expect(result.tests[0].error).toContain('expected status 200 to equal 201');
   });
+
+  it('supports pm.collectionVariables get, set, and has', () => {
+    const script = `
+      pm.test("Read initial collection variable", function () {
+        pm.expect(pm.collectionVariables.get("api_prefix")).to.equal("v1");
+        pm.expect(pm.collectionVariables.has("api_prefix")).to.equal(true);
+      });
+
+      pm.collectionVariables.set("session_token", "col_token_999");
+    `;
+
+    const result = executeScript(script, {
+      environment: {},
+      variables: {},
+      collectionVariables: { api_prefix: 'v1' },
+      request: { url: 'https://api.com', method: 'GET', headers: {} },
+    });
+
+    expect(result.tests.length).toBe(1);
+    expect(result.tests[0].passed).toBe(true);
+    expect(result.collectionMutations['session_token']).toBe('col_token_999');
+  });
 });
 

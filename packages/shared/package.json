@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "vitest run"
+    "test": "vitest run --no-file-parallelism"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
