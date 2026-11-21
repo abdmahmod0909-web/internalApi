@@ -770,7 +770,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openTab: (partialRequest, customId) => {
     const tabs = get().tabs;
-    const tabId = customId || `tab-${Date.now()}`;
+    const tabId = customId || `tab-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
     // If already open, switch to it
     const existing = tabs.find((t) => t.id === tabId);
@@ -842,7 +842,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (filtered.length === 0) {
       const resetTabs = [
         {
-          id: `tab-${Date.now()}`,
+          id: `tab-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           name: '',
           request: { ...DEFAULT_NEW_REQUEST },
           isDirty: false,
@@ -869,7 +869,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { tabs } = get();
     const sourceTab = tabs.find((t) => t.id === tabId);
     if (!sourceTab) return;
-    const newTabId = `tab-${Date.now()}`;
+    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const duplicatedTab = {
       id: newTabId,
       name: sourceTab.name ? `${sourceTab.name} (Copy)` : 'Untitled Request (Copy)',

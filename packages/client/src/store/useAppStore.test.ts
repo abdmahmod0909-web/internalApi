@@ -85,8 +85,8 @@ describe('Client Zustand Store', () => {
     const store = useAppStore.getState();
 
     // Open two new distinct tabs
-    store.openTab({ name: 'Tab A', method: 'GET', url: 'https://example.com/a' });
-    store.openTab({ name: 'Tab B', method: 'POST', url: 'https://example.com/b' });
+    store.openTab({ name: 'Tab A', method: 'GET', url: 'https://example.com/a' }, 'tab-test-a');
+    store.openTab({ name: 'Tab B', method: 'POST', url: 'https://example.com/b' }, 'tab-test-b');
 
     const currentTabs = useAppStore.getState().tabs;
     const tabA = currentTabs.find((t) => t.name === 'Tab A')!;
