@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { Environment, EnvironmentVariable, DatabaseConnectionConfig } from '@internalapi/shared';
+import { VariableHighlightedInput } from '../common/VariableHighlightedInput.js';
 
 const EMPTY_DB_CONFIG: DatabaseConnectionConfig = {
   type: 'postgres',
@@ -305,17 +306,28 @@ export const EnvironmentModal: React.FC = () => {
                                 placeholder="variable_name"
                                 value={v.key}
                                 onChange={(e) => updateVariable(idx, { key: e.target.value })}
-                                className="w-full bg-transparent text-gray-200 outline-none font-mono text-[11px]"
+                                className="w-full bg-transparent text-orange-400 font-semibold outline-none font-mono text-[11px]"
                               />
                             </div>
                             <div className="pr-2">
-                              <input
-                                type={v.isSecret ? 'password' : 'text'}
-                                placeholder="value"
-                                value={v.value}
-                                onChange={(e) => updateVariable(idx, { value: e.target.value })}
-                                className="w-full bg-transparent text-gray-200 outline-none font-mono text-[11px]"
-                              />
+                              {v.isSecret ? (
+                                <input
+                                  type="password"
+                                  placeholder="value"
+                                  value={v.value}
+                                  onChange={(e) => updateVariable(idx, { value: e.target.value })}
+                                  className="w-full bg-transparent text-gray-200 outline-none font-mono text-[11px]"
+                                />
+                              ) : (
+                                <VariableHighlightedInput
+                                  placeholder="value"
+                                  value={v.value}
+                                  onChange={(val) => updateVariable(idx, { value: val })}
+                                  paddingClasses="px-0 py-0"
+                                  typographyClasses="font-mono text-[11px] leading-normal"
+                                  inputClassName="text-gray-200"
+                                />
+                              )}
                             </div>
                             <div className="flex justify-center">
                               <button

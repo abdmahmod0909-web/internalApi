@@ -1030,7 +1030,7 @@ export const CollectionSettingsTab: React.FC<CollectionSettingsTabProps> = ({ co
                           value={v.key}
                           placeholder="e.g. base_url"
                           onChange={(e) => handleUpdateVariable(v.id, { key: e.target.value })}
-                          className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1 text-white font-mono text-xs outline-none focus:border-orange-500"
+                          className="w-full bg-gray-900 border border-gray-800 rounded px-2.5 py-1 text-orange-400 font-semibold font-mono text-xs outline-none focus:border-orange-500"
                         />
                       </div>
 

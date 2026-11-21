@@ -6,6 +6,7 @@ import { JsonEditor } from './JsonEditor.js';
 import { Play, Save, Loader2, Sparkles, Key, Terminal, Check, Copy, X, Eye, EyeOff, Clock, Folder, Code, Globe } from 'lucide-react';
 import { isCurlCommand, parseCurlCommand, generateCurlCommand } from '@internalapi/shared';
 import type { HttpMethod, BodyType, AuthType } from '@internalapi/shared';
+import { VariableHighlightedInput } from '../common/VariableHighlightedInput.js';
 
 const HTTP_METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -39,6 +40,7 @@ export const RequestBuilder: React.FC = () => {
   const [showBasicPassword, setShowBasicPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showClientSecret, setShowClientSecret] = useState(false);
+  const [isCopiedResolvedUrl, setIsCopiedResolvedUrl] = useState(false);
 
   if (!currentTab) {
     return <div className="p-8 text-center text-gray-500">No active request tab.</div>;
@@ -91,6 +93,90 @@ export const RequestBuilder: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Memoized available variables across active environment and active collection
+  const allAvailableVariables = useMemo(() => {
+    const list: Array<{ key: string; value: string; scope: string }> = [];
+
+    // 1. Environment variables
+    const currentEnv = environments.find((e) => e.id === activeEnvironmentId);
+    if (currentEnv) {
+      for (const v of currentEnv.variables) {
+        if (v.isEnabled && v.key) {
+          list.push({ key: v.key, value: v.value, scope: `Env (${currentEnv.name})` });
+        }
+      }
+    }
+
+    // 2. Collection variables
+    const parentCol = collections.find(
+      (c) => c.requests?.some((r) => r.id === req.id) || c.id === req.collectionId
+    );
+    if (parentCol) {
+      if (Array.isArray(parentCol.collectionVariables)) {
+        for (const cv of parentCol.collectionVariables) {
+          if (cv.isEnabled !== false && cv.key) {
+            list.push({
+              key: cv.key,
+              value: cv.currentValue || cv.value,
+              scope: `Collection (${parentCol.name})`,
+            });
+          }
+        }
+      } else if (parentCol.variables) {
+        for (const [k, v] of Object.entries(parentCol.variables)) {
+          list.push({ key: k, value: String(v), scope: `Collection (${parentCol.name})` });
+        }
+      }
+    }
+
+    return list;
+  }, [environments, activeEnvironmentId, collections, req?.id, req?.collectionId]);
+
+  // Compute resolved URL preview info when URL has {{...}}
+  const resolvedUrlInfo = useMemo(() => {
+    if (!req.url || !req.url.includes('{{')) return null;
+
+    const matches = req.url.match(/\{\{([a-zA-Z0-9_.\-]+)\}\}/g);
+    if (!matches || matches.length === 0) return null;
+
+    let interpolated = req.url;
+    const detectedVars: Array<{
+      key: string;
+      value: string;
+      isResolved: boolean;
+      scope?: string;
+    }> = [];
+
+    const seen = new Set<string>();
+    for (const m of matches) {
+      const varName = m.slice(2, -2);
+      if (seen.has(varName)) continue;
+      seen.add(varName);
+
+      const matchedVar = allAvailableVariables.find((v) => v.key === varName);
+      if (matchedVar) {
+        detectedVars.push({
+          key: varName,
+          value: matchedVar.value,
+          isResolved: true,
+          scope: matchedVar.scope,
+        });
+        interpolated = interpolated.split(`{{${varName}}}`).join(matchedVar.value);
+      } else {
+        detectedVars.push({
+          key: varName,
+          value: '',
+          isResolved: false,
+        });
+      }
+    }
+
+    return {
+      url: interpolated,
+      variables: detectedVars,
+    };
+  }, [req.url, allAvailableVariables]);
+
   // Compute suggestions (History, Collections, Environment variables, Starter presets)
   const urlSuggestions = useMemo(() => {
     const query = req?.url?.trim().toLowerCase() || '';
@@ -103,21 +189,16 @@ export const RequestBuilder: React.FC = () => {
     }[] = [];
     const seenUrls = new Set<string>();
 
-    // 1. Environment variables
-    const currentEnv = environments.find((e) => e.id === activeEnvironmentId);
-    if (currentEnv) {
-      for (const v of currentEnv.variables) {
-        if (v.isEnabled && v.key) {
-          const token = `{{${v.key}}}`;
-          if (!query || token.toLowerCase().includes(query) || v.key.toLowerCase().includes(query)) {
-            list.push({
-              type: 'env',
-              text: token,
-              label: v.key,
-              value: v.value,
-            });
-          }
-        }
+    // 1. Environment & Collection variables
+    for (const v of allAvailableVariables) {
+      const token = `{{${v.key}}}`;
+      if (!query || token.toLowerCase().includes(query) || v.key.toLowerCase().includes(query)) {
+        list.push({
+          type: 'env',
+          text: token,
+          label: v.scope ? `${v.key} (${v.scope})` : v.key,
+          value: v.value,
+        });
       }
     }
 
@@ -321,106 +402,187 @@ export const RequestBuilder: React.FC = () => {
       </div>
 
       {/* URL Execution Bar: Method + URL + Send (Unified Postman-style bar) */}
-      <div className="p-3 border-b border-gray-800 flex items-center space-x-2 relative" ref={urlContainerRef}>
-        <div className="flex flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-visible relative p-1 items-center">
-          {/* White Method Selector Badge - Rounded like the rest of the body */}
-          <select
-            value={req.method}
-            onChange={(e) =>
-              updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
-            }
-            className={`bg-white hover:bg-gray-100 border border-gray-200/90 font-bold text-xs px-3 py-1.5 rounded-lg outline-none cursor-pointer shrink-0 shadow-xs transition-colors my-0.5 ml-0.5 ${
-              req.method === 'GET'
-                ? 'text-emerald-600'
-                : req.method === 'POST'
-                ? 'text-orange-600'
-                : req.method === 'PUT'
-                ? 'text-blue-600'
-                : req.method === 'DELETE'
-                ? 'text-rose-600'
-                : req.method === 'PATCH'
-                ? 'text-purple-600'
-                : 'text-gray-800'
-            }`}
-          >
-            {HTTP_METHODS.map((m) => (
-              <option key={m} value={m} className="bg-white text-gray-900 font-bold">
-                {m}
-              </option>
-            ))}
-          </select>
+      <div className="p-3 border-b border-gray-800 flex flex-col gap-2 relative" ref={urlContainerRef}>
+        <div className="flex items-center space-x-2">
+          <div className="flex flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-visible relative p-1 items-center">
+            {/* White Method Selector Badge - Rounded like the rest of the body */}
+            <select
+              value={req.method}
+              onChange={(e) =>
+                updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
+              }
+              className={`bg-white hover:bg-gray-100 border border-gray-200/90 font-bold text-xs px-3 py-1.5 rounded-lg outline-none cursor-pointer shrink-0 shadow-xs transition-colors my-0.5 ml-0.5 ${
+                req.method === 'GET'
+                  ? 'text-emerald-600'
+                  : req.method === 'POST'
+                  ? 'text-orange-600'
+                  : req.method === 'PUT'
+                  ? 'text-blue-600'
+                  : req.method === 'DELETE'
+                  ? 'text-rose-600'
+                  : req.method === 'PATCH'
+                  ? 'text-purple-600'
+                  : 'text-gray-800'
+              }`}
+            >
+              {HTTP_METHODS.map((m) => (
+                <option key={m} value={m} className="bg-white text-gray-900 font-bold">
+                  {m}
+                </option>
+              ))}
+            </select>
 
-          {/* URL Input with Suggestions */}
-          <input
-            type="text"
-            placeholder="Enter request URL or paste cURL command here..."
-            value={req.url}
-            onFocus={() => setIsUrlSuggestionsOpen(true)}
-            onChange={(e) => {
-              handleUrlChange(e.target.value);
-              setIsUrlSuggestionsOpen(true);
-              setSelectedSuggestionIndex(-1);
-            }}
-            onPaste={handleUrlPaste}
-            onKeyDown={(e) => {
-              if (isUrlSuggestionsOpen && urlSuggestions.length > 0) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex((prev) => (prev + 1) % urlSuggestions.length);
-                  return;
+            {/* URL Input with Variable Highlighting & Suggestions */}
+            <VariableHighlightedInput
+              placeholder="Enter request URL or paste cURL command here..."
+              value={req.url}
+              variables={allAvailableVariables}
+              onFocus={() => setIsUrlSuggestionsOpen(true)}
+              onChange={(val) => {
+                handleUrlChange(val);
+                setIsUrlSuggestionsOpen(true);
+                setSelectedSuggestionIndex(-1);
+              }}
+              onPaste={handleUrlPaste}
+              onKeyDown={(e) => {
+                if (isUrlSuggestionsOpen && urlSuggestions.length > 0) {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedSuggestionIndex((prev) => (prev + 1) % urlSuggestions.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedSuggestionIndex((prev) => (prev - 1 + urlSuggestions.length) % urlSuggestions.length);
+                    return;
+                  }
+                  if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+                    e.preventDefault();
+                    selectSuggestion(urlSuggestions[selectedSuggestionIndex]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    setIsUrlSuggestionsOpen(false);
+                    return;
+                  }
                 }
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault();
-                  setSelectedSuggestionIndex((prev) => (prev - 1 + urlSuggestions.length) % urlSuggestions.length);
-                  return;
-                }
-                if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
-                  e.preventDefault();
-                  selectSuggestion(urlSuggestions[selectedSuggestionIndex]);
-                  return;
-                }
-                if (e.key === 'Escape') {
+
+                if (e.key === 'Enter' && req.url?.trim()) {
                   setIsUrlSuggestionsOpen(false);
-                  return;
+                  sendRequest();
                 }
-              }
+              }}
+              containerClassName="flex-1 min-w-0"
+              paddingClasses="px-3 py-1.5"
+              typographyClasses="font-mono text-xs leading-normal"
+            />
 
-              if (e.key === 'Enter' && req.url?.trim()) {
-                setIsUrlSuggestionsOpen(false);
-                sendRequest();
-              }
-            }}
-            className="flex-1 bg-transparent px-3 py-1.5 text-xs text-gray-100 placeholder-gray-500 font-mono outline-none min-w-0"
-          />
-
-          {/* Clean Integrated cURL Button */}
-          <button
-            onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                if (text && isCurlCommand(text)) {
-                  applyCurlImport(text);
-                  return;
+            {/* Clean Integrated cURL Button */}
+            <button
+              onClick={async () => {
+                try {
+                  const text = await navigator.clipboard.readText();
+                  if (text && isCurlCommand(text)) {
+                    applyCurlImport(text);
+                    return;
+                  }
+                } catch {}
+                const promptCurl = prompt('Paste your cURL command here:');
+                if (promptCurl && isCurlCommand(promptCurl)) {
+                  applyCurlImport(promptCurl);
+                } else if (promptCurl) {
+                  alert('Input does not start with curl');
                 }
-              } catch {}
-              const promptCurl = prompt('Paste your cURL command here:');
-              if (promptCurl && isCurlCommand(promptCurl)) {
-                applyCurlImport(promptCurl);
-              } else if (promptCurl) {
-                alert('Input does not start with curl');
-              }
-            }}
-            className="flex items-center space-x-1 px-2.5 py-1 text-gray-400 hover:text-orange-400 hover:bg-gray-800 rounded transition-colors shrink-0 my-1 mr-1"
-            title="Import or paste cURL command"
-          >
-            <Terminal className="w-3.5 h-3.5 text-orange-400" />
-            <span className="text-[11px] font-medium hidden sm:inline">cURL</span>
-          </button>
+              }}
+              className="flex items-center space-x-1 px-2.5 py-1 text-gray-400 hover:text-orange-400 hover:bg-gray-800 rounded transition-colors shrink-0 my-1 mr-1"
+              title="Import or paste cURL command"
+            >
+              <Terminal className="w-3.5 h-3.5 text-orange-400" />
+              <span className="text-[11px] font-medium hidden sm:inline">cURL</span>
+            </button>
+          </div>
+
+          {/* Send / Cancel Button */}
+          {currentTab.isLoading ? (
+            <button
+              onClick={() => cancelRequest(currentTab.id)}
+              className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-md transition-all shrink-0 shadow-sm min-w-[76px] animate-pulse"
+              title="Cancel ongoing request"
+            >
+              <X className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Cancel</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                if (req.url?.trim()) {
+                  sendRequest();
+                }
+              }}
+              disabled={!req.url?.trim()}
+              className="flex items-center justify-center space-x-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-orange-600 text-white text-xs font-semibold px-5 py-2 rounded-md transition-colors shrink-0 shadow-sm min-w-[76px]"
+              title={!req.url?.trim() ? 'Enter a URL to send request' : 'Send Request (Ctrl+Enter)'}
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Send</span>
+            </button>
+          )}
         </div>
+
+        {/* Resolved URL Preview Strip (shown when URL contains {{variables}}) */}
+        {resolvedUrlInfo && (
+          <div className="px-3 py-1.5 bg-gray-900/90 border border-gray-800 rounded-lg flex items-center justify-between text-xs font-mono animate-fadeIn">
+            <div className="flex items-center space-x-2 min-w-0 flex-1 mr-2">
+              <span className="text-orange-400 font-semibold flex items-center gap-1.5 shrink-0 text-[11px]">
+                <Sparkles className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                <span>Resolved URL:</span>
+              </span>
+              <span className="text-gray-200 select-all truncate text-[11px]" title={resolvedUrlInfo.url}>
+                {resolvedUrlInfo.url}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(resolvedUrlInfo.url);
+                  setIsCopiedResolvedUrl(true);
+                  setTimeout(() => setIsCopiedResolvedUrl(false), 2000);
+                }}
+                className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-800 shrink-0 transition-colors"
+                title="Copy resolved URL to clipboard"
+              >
+                {isCopiedResolvedUrl ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-1.5 shrink-0 overflow-x-auto no-scrollbar">
+              {resolvedUrlInfo.variables.map((v) => (
+                <span
+                  key={v.key}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
+                    v.isResolved
+                      ? 'bg-orange-500/10 text-orange-300 border-orange-500/30'
+                      : 'bg-rose-500/10 text-rose-300 border-rose-500/30 font-semibold'
+                  }`}
+                  title={
+                    v.isResolved
+                      ? `${v.key} = "${v.value}" (${v.scope})`
+                      : `Unresolved variable: {{${v.key}}}`
+                  }
+                >
+                  {v.isResolved ? `${v.key}: ${v.value}` : `{{${v.key}}}: unresolved`}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* URL Auto-Suggestions Dropdown (Postman-style) */}
         {isUrlSuggestionsOpen && urlSuggestions.length > 0 && (
-          <div className="absolute top-full left-3 right-[92px] mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden divide-y divide-gray-800 max-h-72 overflow-y-auto animate-fadeIn">
+          <div className="absolute top-[52px] left-3 right-[92px] mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden divide-y divide-gray-800 max-h-72 overflow-y-auto animate-fadeIn">
             <div className="px-3 py-1.5 bg-gray-950 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-gray-400 select-none">
               <span>Suggestions, History & Environment Variables</span>
               <span className="text-gray-500 font-mono">Use ↑ ↓ and Enter</span>
@@ -601,25 +763,28 @@ export const RequestBuilder: React.FC = () => {
               <div>
                 <label className="block text-gray-400 mb-1 text-xs">Token</label>
                 <div className="relative flex items-center">
-                  <input
+                  <VariableHighlightedInput
                     type={showBearerToken ? 'text' : 'password'}
                     placeholder="Bearer token or {{token}}"
                     value={req.auth.bearer?.token || ''}
-                    onChange={(e) =>
+                    variables={allAvailableVariables}
+                    onChange={(val) =>
                       updateActiveRequest((prev) => ({
                         ...prev,
                         auth: {
                           ...prev.auth,
-                          bearer: { token: e.target.value },
+                          bearer: { token: val },
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 font-mono outline-none focus:border-orange-500 text-xs"
+                    containerClassName="w-full"
+                    inputClassName="bg-gray-900 border border-gray-700 rounded pr-10 text-gray-100 font-mono outline-none focus:border-orange-500 text-xs"
+                    paddingClasses="px-3 py-1.5"
                   />
                   <button
                     type="button"
                     onClick={() => setShowBearerToken(!showBearerToken)}
-                    className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
+                    className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors z-10"
                     title={showBearerToken ? 'Hide token' : 'Show token'}
                   >
                     {showBearerToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -632,19 +797,22 @@ export const RequestBuilder: React.FC = () => {
               <div className="space-y-3">
                 <div>
                   <label className="block text-gray-400 mb-1 text-xs">Username</label>
-                  <input
-                    type="text"
+                  <VariableHighlightedInput
+                    placeholder="Username or {{username}}"
                     value={req.auth.basic?.username || ''}
-                    onChange={(e) =>
+                    variables={allAvailableVariables}
+                    onChange={(val) =>
                       updateActiveRequest((prev) => ({
                         ...prev,
                         auth: {
                           ...prev.auth,
-                          basic: { username: e.target.value, password: prev.auth.basic?.password || '' },
+                          basic: { username: val, password: prev.auth.basic?.password || '' },
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
+                    containerClassName="w-full"
+                    inputClassName="bg-gray-900 border border-gray-700 rounded text-gray-100 outline-none text-xs focus:border-orange-500"
+                    paddingClasses="px-3 py-1.5"
                   />
                 </div>
                 <div>
@@ -681,53 +849,58 @@ export const RequestBuilder: React.FC = () => {
               <div className="space-y-3">
                 <div>
                   <label className="block text-gray-400 mb-1 text-xs">Key</label>
-                  <input
-                    type="text"
+                  <VariableHighlightedInput
                     placeholder="X-API-Key"
                     value={req.auth.apiKey?.key || ''}
-                    onChange={(e) =>
+                    variables={allAvailableVariables}
+                    onChange={(val) =>
                       updateActiveRequest((prev) => ({
                         ...prev,
                         auth: {
                           ...prev.auth,
                           apiKey: {
-                            key: e.target.value,
+                            key: val,
                             value: prev.auth.apiKey?.value || '',
                             addTo: prev.auth.apiKey?.addTo || 'header',
                           },
                         },
                       }))
                     }
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 text-gray-100 outline-none text-xs focus:border-orange-500"
+                    containerClassName="w-full"
+                    inputClassName="bg-gray-900 border border-gray-700 rounded text-gray-100 outline-none text-xs focus:border-orange-500"
+                    paddingClasses="px-3 py-1.5"
                   />
                 </div>
                 <div>
                   <label className="block text-gray-400 mb-1 text-xs">Value</label>
                   <div className="relative flex items-center">
-                    <input
+                    <VariableHighlightedInput
                       type={showApiKey ? 'text' : 'password'}
-                      placeholder="api_key_secret_value"
+                      placeholder="api_key_secret_value or {{api_key}}"
                       value={req.auth.apiKey?.value || ''}
-                      onChange={(e) =>
+                      variables={allAvailableVariables}
+                      onChange={(val) =>
                         updateActiveRequest((prev) => ({
                           ...prev,
                           auth: {
                             ...prev.auth,
                             apiKey: {
                               key: prev.auth.apiKey?.key || '',
-                              value: e.target.value,
+                              value: val,
                               addTo: prev.auth.apiKey?.addTo || 'header',
                             },
                           },
                         }))
                       }
-                      className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-1.5 pr-10 text-gray-100 font-mono outline-none text-xs focus:border-orange-500"
+                      containerClassName="w-full"
+                      inputClassName="bg-gray-900 border border-gray-700 rounded pr-10 text-gray-100 font-mono outline-none text-xs focus:border-orange-500"
+                      paddingClasses="px-3 py-1.5"
                     />
                     <button
                       type="button"
                       onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors"
-                      title={showApiKey ? 'Hide API key' : 'Show API key'}
+                      className="absolute right-2 text-gray-400 hover:text-orange-400 p-1 rounded transition-colors z-10"
+                      title={showApiKey ? 'Hide secret value' : 'Show secret value'}
                     >
                       {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
@@ -908,6 +1081,7 @@ export const RequestBuilder: React.FC = () => {
               onChange={(items) => updateActiveRequest((prev) => ({ ...prev, headers: items }))}
               keyPlaceholder="Header"
               valuePlaceholder="Value"
+              isHeaderEditor={true}
             />
           </div>
         )}

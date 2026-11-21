@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Trash2, Plus, Paperclip, FileText, Upload, Check } from 'lucide-react';
 import type { FormDataItem } from '@internalapi/shared';
+import { VariableHighlightedInput } from '../common/VariableHighlightedInput.js';
 
 interface Props {
   items: FormDataItem[];
@@ -180,12 +181,13 @@ export const FormDataEditor: React.FC<Props> = ({ items, onChange }) => {
                       )}
                     </div>
                   ) : (
-                    <input
-                      type="text"
-                      placeholder="Value"
+                    <VariableHighlightedInput
+                      placeholder="Value or {{variable}}"
                       value={item.value}
-                      onChange={(e) => updateItem(idx, { value: e.target.value })}
-                      className="w-full bg-transparent text-gray-200 outline-none placeholder-gray-600 font-mono text-[11px]"
+                      onChange={(val) => updateItem(idx, { value: val })}
+                      paddingClasses="px-1 py-0.5"
+                      typographyClasses="font-mono text-[11px] leading-normal"
+                      inputClassName="placeholder-gray-600 text-gray-200"
                     />
                   )}
                 </div>

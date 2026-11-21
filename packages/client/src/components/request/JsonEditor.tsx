@@ -48,12 +48,37 @@ function renderLineTokens(line: string): React.ReactNode {
           </span>
         );
       } else {
-        // String Value
-        parts.push(
-          <span key={`s-${match.index}`} className="text-emerald-400 font-normal">
-            {token}
-          </span>
-        );
+        // String Value with Variable Highlighting
+        if (token.includes('{{')) {
+          const subTokens = token.split(/(\{\{[a-zA-Z0-9_.\-]+(?:--[a-zA-Z0-9_.\-]+)?\}\})/g);
+          parts.push(
+            <span key={`s-${match.index}`} className="font-normal">
+              {subTokens.map((sub, sIdx) => {
+                if (sub.startsWith('{{') && sub.endsWith('}}')) {
+                  return (
+                    <span
+                      key={sIdx}
+                      className="text-orange-400 font-semibold bg-orange-500/20 rounded-xs px-0.5"
+                    >
+                      {sub}
+                    </span>
+                  );
+                }
+                return (
+                  <span key={sIdx} className="text-emerald-400">
+                    {sub}
+                  </span>
+                );
+              })}
+            </span>
+          );
+        } else {
+          parts.push(
+            <span key={`s-${match.index}`} className="text-emerald-400 font-normal">
+              {token}
+            </span>
+          );
+        }
       }
     } else if (/true|false/.test(token)) {
       // Boolean
