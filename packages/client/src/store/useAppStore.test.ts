@@ -80,5 +80,64 @@ describe('Client Zustand Store', () => {
     expect(useAppStore.getState().currentUser).toBeNull();
     expect(useAppStore.getState().authToken).toBeNull();
   });
+
+  it('manages closeTabs and resets to a blank tab when all tabs are closed', () => {
+    const store = useAppStore.getState();
+
+    // Open two new distinct tabs
+    store.openTab({ name: 'Tab A', method: 'GET', url: 'https://example.com/a' });
+    store.openTab({ name: 'Tab B', method: 'POST', url: 'https://example.com/b' });
+
+    const currentTabs = useAppStore.getState().tabs;
+    const tabA = currentTabs.find((t) => t.name === 'Tab A')!;
+    const tabB = currentTabs.find((t) => t.name === 'Tab B')!;
+    expect(tabA).toBeDefined();
+    expect(tabB).toBeDefined();
+
+    // Close only tabA
+    store.closeTabs([tabA.id]);
+    let afterClosingA = useAppStore.getState().tabs;
+    expect(afterClosingA.some((t) => t.id === tabA.id)).toBe(false);
+    expect(afterClosingA.some((t) => t.id === tabB.id)).toBe(true);
+
+    // Close all remaining tabs
+    const remainingIds = afterClosingA.map((t) => t.id);
+    store.closeTabs(remainingIds);
+
+    const afterClosingAll = useAppStore.getState().tabs;
+    expect(afterClosingAll.length).toBe(1);
+    expect(afterClosingAll[0].id).toBe(useAppStore.getState().activeTabId);
+    expect(afterClosingAll[0].isDirty).toBe(false);
+  });
+
+  it('duplicates tab properly with (Copy) name and marked as dirty', () => {
+    const store = useAppStore.getState();
+    store.openTab({ name: 'Original Query', method: 'GET', url: 'https://example.com/query' });
+
+    const sourceTab = useAppStore.getState().tabs.find((t) => t.name === 'Original Query')!;
+    expect(sourceTab).toBeDefined();
+
+    store.duplicateTab(sourceTab.id);
+
+    const updatedTabs = useAppStore.getState().tabs;
+    const duplicate = updatedTabs.find((t) => t.name === 'Original Query (Copy)');
+    expect(duplicate).toBeDefined();
+    expect(duplicate?.isDirty).toBe(true);
+    expect(duplicate?.request.url).toBe('https://example.com/query');
+    expect(useAppStore.getState().activeTabId).toBe(duplicate?.id);
+  });
+
+  it('manages closeUnsavedPreference setting', () => {
+    const store = useAppStore.getState();
+
+    store.setCloseUnsavedPreference('save');
+    expect(useAppStore.getState().closeUnsavedPreference).toBe('save');
+
+    store.setCloseUnsavedPreference('discard');
+    expect(useAppStore.getState().closeUnsavedPreference).toBe('discard');
+
+    store.setCloseUnsavedPreference('ask');
+    expect(useAppStore.getState().closeUnsavedPreference).toBe('ask');
+  });
 });
 

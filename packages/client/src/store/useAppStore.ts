@@ -166,6 +166,11 @@ interface AppState {
 
   openTab: (request?: Partial<ApiRequestData>, customId?: string) => void;
   closeTab: (tabId: string) => void;
+  closeTabs: (tabIds: string[]) => void;
+  duplicateTab: (tabId: string) => void;
+  saveTabRequest: (tabId: string, collectionId?: string, folderId?: string | null) => Promise<boolean>;
+  closeUnsavedPreference: 'ask' | 'save' | 'discard';
+  setCloseUnsavedPreference: (pref: 'ask' | 'save' | 'discard') => void;
   setActiveTabId: (tabId: string) => void;
   updateActiveRequest: (updater: (prev: ApiRequestData) => ApiRequestData) => void;
   sendRequest: (tabId?: string) => Promise<void>;
@@ -342,6 +347,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   theme: (getStoredItem('internalapi_theme', 'dark') as any),
   splitRatio: parseFloat(getStoredItem('internalapi_split_ratio', '50')),
   layout: (getStoredItem('internalapi_layout', 'horizontal') as any),
+  closeUnsavedPreference: ((getStoredItem('internalapi_close_unsaved_pref', 'ask') as any) || 'ask'),
+  setCloseUnsavedPreference: (pref: 'ask' | 'save' | 'discard') => {
+    setStoredItem('internalapi_close_unsaved_pref', pref);
+    set({ closeUnsavedPreference: pref });
+  },
 
   // Flows state
   activeView: 'requests',
@@ -824,6 +834,61 @@ export const useAppStore = create<AppState>((set, get) => ({
     setStoredItem('internalapi_active_tab_id', nextActive);
   },
 
+  closeTabs: (tabIds: string[]) => {
+    const { tabs, activeTabId } = get();
+    const toCloseSet = new Set(tabIds);
+    const filtered = tabs.filter((t) => !toCloseSet.has(t.id));
+
+    if (filtered.length === 0) {
+      const resetTabs = [
+        {
+          id: `tab-${Date.now()}`,
+          name: '',
+          request: { ...DEFAULT_NEW_REQUEST },
+          isDirty: false,
+          isLoading: false,
+        },
+      ];
+      set({ tabs: resetTabs, activeTabId: resetTabs[0].id });
+      setStoredItem('internalapi_tabs', JSON.stringify(resetTabs));
+      setStoredItem('internalapi_active_tab_id', resetTabs[0].id);
+      return;
+    }
+
+    let nextActive = activeTabId;
+    if (toCloseSet.has(activeTabId)) {
+      nextActive = filtered[0].id;
+    }
+
+    set({ tabs: filtered, activeTabId: nextActive });
+    setStoredItem('internalapi_tabs', JSON.stringify(filtered));
+    setStoredItem('internalapi_active_tab_id', nextActive);
+  },
+
+  duplicateTab: (tabId: string) => {
+    const { tabs } = get();
+    const sourceTab = tabs.find((t) => t.id === tabId);
+    if (!sourceTab) return;
+    const newTabId = `tab-${Date.now()}`;
+    const duplicatedTab = {
+      id: newTabId,
+      name: sourceTab.name ? `${sourceTab.name} (Copy)` : 'Untitled Request (Copy)',
+      request: {
+        ...sourceTab.request,
+        id: undefined,
+        name: sourceTab.request.name ? `${sourceTab.request.name} (Copy)` : 'Untitled Request (Copy)',
+      },
+      isDirty: true,
+      isLoading: false,
+    };
+    const idx = tabs.findIndex((t) => t.id === tabId);
+    const nextTabs = [...tabs];
+    nextTabs.splice(idx + 1, 0, duplicatedTab);
+    set({ tabs: nextTabs, activeTabId: newTabId });
+    setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
+    setStoredItem('internalapi_active_tab_id', newTabId);
+  },
+
   setActiveTabId: (tabId) => {
     set({ activeTabId: tabId });
     setStoredItem('internalapi_active_tab_id', tabId);
@@ -1146,6 +1211,78 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ collections: nextCollections, tabs: nextTabs });
     setStoredItem('internalapi_collections', JSON.stringify(nextCollections));
     setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
+  },
+
+  saveTabRequest: async (tabId, collectionId, folderId) => {
+    const { tabs, collections } = get();
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return false;
+
+    let targetCollections = [...collections];
+    let colId = collectionId || tab.request.collectionId;
+
+    if (!colId && targetCollections.length > 0) {
+      colId = targetCollections[0].id;
+    }
+
+    if (!colId || targetCollections.length === 0) {
+      await get().createCollection('Saved Requests');
+      targetCollections = get().collections;
+      colId = targetCollections[0]?.id;
+    }
+
+    if (!colId) return false;
+
+    const targetCol = targetCollections.find((c) => c.id === colId);
+    if (!targetCol) return false;
+
+    const updatedCol = { ...targetCol };
+    const savedReq: ApiRequestData = {
+      ...tab.request,
+      name: tab.name?.trim() || tab.request.name?.trim() || 'Untitled Request',
+      id: tab.request.id || `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      collectionId: colId,
+      folderId: folderId !== undefined ? folderId : (tab.request.folderId ?? null),
+    };
+
+    if (savedReq.folderId) {
+      updatedCol.folders = (updatedCol.folders || []).map((f) => {
+        if (f.id === savedReq.folderId) {
+          const reqs = f.requests || [];
+          const idx = reqs.findIndex((r) => r.id === savedReq.id);
+          const next = idx >= 0 ? [...reqs] : [...reqs, savedReq];
+          if (idx >= 0) next[idx] = savedReq;
+          return { ...f, requests: next };
+        }
+        return f;
+      });
+    } else {
+      const reqs = updatedCol.requests || [];
+      const idx = reqs.findIndex((r) => r.id === savedReq.id);
+      const next = idx >= 0 ? [...reqs] : [...reqs, savedReq];
+      if (idx >= 0) next[idx] = savedReq;
+      updatedCol.requests = next;
+    }
+
+    const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
+    const res = await apiFetch(`/api/collections${envParam}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedCol),
+    });
+
+    if (res.ok) {
+      const saved = await res.json();
+      const nextCollections = targetCollections.map((c) => (c.id === saved.id ? saved : c));
+      const nextTabs = get().tabs.map((t) =>
+        t.id === tabId ? { ...t, name: savedReq.name, request: savedReq, isDirty: false } : t
+      );
+      set({ collections: nextCollections, tabs: nextTabs });
+      setStoredItem('internalapi_collections', JSON.stringify(nextCollections));
+      setStoredItem('internalapi_tabs', JSON.stringify(nextTabs));
+      return true;
+    }
+    return false;
   },
 
   saveEnvironment: async (env) => {
