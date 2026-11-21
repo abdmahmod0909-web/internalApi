@@ -127,7 +127,8 @@ interface AppState {
   loginAction: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string }>;
   logoutAction: () => void;
   fetchTeamUsersAction: () => Promise<void>;
-  createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole }) => Promise<{ success: boolean; error?: string }>;
+  createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole; workspaceIds?: string[] }) => Promise<{ success: boolean; error?: string }>;
+  updateTeamUserAction: (id: string, data: { name?: string; role?: UserRole; workspaceIds?: string[]; isActive?: boolean }) => Promise<{ success: boolean; error?: string }>;
   deleteTeamUserAction: (id: string) => Promise<{ success: boolean; error?: string }>;
   adminResetPasswordAction: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   updateProfileAction: (params: { name?: string; oldPassword?: string; newPassword?: string }) => Promise<{ success: boolean; error?: string }>;
@@ -468,6 +469,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  updateTeamUserAction: async (id, userData) => {
+    try {
+      const res = await apiFetch(`/api/users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || data.message || 'Failed to update user' };
+      }
+      if (get().currentUser?.id === id) {
+        const updatedCurrent = { ...get().currentUser!, ...data };
+        setStoredItem('internalapi_user', JSON.stringify(updatedCurrent));
+        set({ currentUser: updatedCurrent });
+      }
+      await get().fetchTeamUsersAction();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error updating user' };
+    }
+  },
+
   deleteTeamUserAction: async (id) => {
     try {
       const res = await apiFetch(`/api/users/${id}`, {
@@ -653,26 +677,37 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      const activeWs = get().activeWorkspaceId;
-      const [wsRes, envRes, colRes, histRes, flowRes] = await Promise.all([
-        apiFetch('/api/workspaces').then((r) => r.json()).catch(() => []),
-        apiFetch(`/api/environments?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        apiFetch(`/api/collections?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        apiFetch(`/api/history?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
-        apiFetch(`/api/flows?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []),
+      // 1. Fetch workspaces first to know what workspaces user is linked to
+      const wsRes = await apiFetch('/api/workspaces').then((r) => r.json()).catch(() => []);
+      const workspaces: Workspace[] = Array.isArray(wsRes) ? wsRes : [];
+
+      let activeWs = get().activeWorkspaceId;
+      if (workspaces.length > 0) {
+        if (!workspaces.some((w) => w.id === activeWs)) {
+          activeWs = workspaces[0].id;
+          setStoredItem('internalapi_active_workspace_id', activeWs);
+        }
+      } else {
+        activeWs = '';
+        setStoredItem('internalapi_active_workspace_id', '');
+      }
+
+      // 2. Fetch environments, collections, history, and flows for the authorized active workspace
+      const [envRes, colRes, histRes, flowRes] = await Promise.all([
+        activeWs ? apiFetch(`/api/environments?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []) : Promise.resolve([]),
+        activeWs ? apiFetch(`/api/collections?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []) : Promise.resolve([]),
+        activeWs ? apiFetch(`/api/history?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []) : Promise.resolve([]),
+        activeWs ? apiFetch(`/api/flows?workspaceId=${activeWs}`).then((r) => r.json()).catch(() => []) : Promise.resolve([]),
       ]);
 
-      const workspaces = Array.isArray(wsRes) ? wsRes : [];
-      const fetchedEnvs = Array.isArray(envRes) ? envRes : [];
-      const fetchedCols = Array.isArray(colRes) ? colRes : [];
+      const environments = Array.isArray(envRes) ? envRes : [];
+      const collections = Array.isArray(colRes) ? colRes : [];
       const history = Array.isArray(histRes) ? histRes : [];
       const flows = Array.isArray(flowRes) ? flowRes : [];
 
-      const environments = fetchedEnvs.length > 0 ? fetchedEnvs : get().environments;
-      const collections = fetchedCols.length > 0 ? fetchedCols : get().collections;
-
       set({
         workspaces,
+        activeWorkspaceId: activeWs,
         environments,
         collections,
         history,

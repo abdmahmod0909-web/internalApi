@@ -72,9 +72,9 @@ export const Navbar: React.FC = () => {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
-  const currentWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || {
+  const currentWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0] || {
     id: activeWorkspaceId,
-    name: 'Company Internal APIs',
+    name: workspaces.length === 0 ? 'No Workspace' : 'Company Internal APIs',
   };
 
   // Close dropdown on outside click

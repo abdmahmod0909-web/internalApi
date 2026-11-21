@@ -254,6 +254,7 @@ export interface User {
   role: UserRole;
   isActive: boolean;
   createdAt: string;
+  workspaceIds?: string[];
 }
 
 export interface AuthSession {

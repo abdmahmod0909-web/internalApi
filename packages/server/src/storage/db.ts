@@ -29,6 +29,7 @@ export interface StoredUser {
   role: 'admin' | 'editor' | 'viewer';
   isActive: boolean;
   createdAt: string;
+  workspaceIds?: string[];
 }
 
 export function hashPassword(password: string, salt = crypto.randomBytes(16).toString('hex')): { hash: string; salt: string } {
@@ -364,7 +365,8 @@ class LocalFileStorage {
                 salt TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'editor',
                 is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                workspace_ids TEXT
               );`,
             },
             {
@@ -426,6 +428,11 @@ class LocalFileStorage {
             { sql: `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);` },
           ]);
 
+          // Attempt adding workspace_ids column if users table was created previously without it
+          try {
+            await this.executeTurso([{ sql: `ALTER TABLE users ADD COLUMN workspace_ids TEXT;` }]);
+          } catch (_) {}
+
           // 2. Fetch all rows from dedicated tables
           const results = await this.executeTurso([
             { sql: `SELECT * FROM workspaces;` },
@@ -453,16 +460,26 @@ class LocalFileStorage {
           }
 
           if (usersRows.length > 0) {
-            this.data.users = usersRows.map((r: any) => ({
-              id: r.id,
-              email: r.email,
-              name: r.name,
-              passwordHash: r.password_hash,
-              salt: r.salt,
-              role: r.role || 'editor',
-              isActive: r.is_active === '1' || r.is_active === 1 || r.is_active === true,
-              createdAt: r.created_at,
-            }));
+            this.data.users = usersRows.map((r: any) => {
+              let wsIds: string[] | undefined = undefined;
+              if (r.workspace_ids) {
+                try {
+                  const parsed = JSON.parse(r.workspace_ids);
+                  if (Array.isArray(parsed)) wsIds = parsed;
+                } catch (_) {}
+              }
+              return {
+                id: r.id,
+                email: r.email,
+                name: r.name,
+                passwordHash: r.password_hash,
+                salt: r.salt,
+                role: r.role || 'editor',
+                isActive: r.is_active === '1' || r.is_active === 1 || r.is_active === true,
+                createdAt: r.created_at,
+                workspaceIds: wsIds,
+              };
+            });
           }
 
           if (environmentsRows.length > 0) {
@@ -550,11 +567,28 @@ class LocalFileStorage {
   }
 
   // Workspaces
-  getWorkspaces(): Workspace[] {
-    return this.data.workspaces;
+  getWorkspaces(userId?: string, userRole?: string): Workspace[] {
+    if (!userId || userRole === 'admin') {
+      return this.data.workspaces;
+    }
+    const user = this.data.users?.find((u) => u.id === userId);
+    if (!user || user.role === 'admin') {
+      return this.data.workspaces;
+    }
+    const allowed = user.workspaceIds ?? [DEFAULT_WORKSPACE_ID];
+    return this.data.workspaces.filter((w) => allowed.includes(w.id));
   }
 
-  createWorkspace(name: string, description?: string): Workspace {
+  userHasWorkspaceAccess(userId?: string, userRole?: string, workspaceId?: string): boolean {
+    if (!workspaceId) return true;
+    if (!userId || userRole === 'admin') return true;
+    const user = this.data.users?.find((u) => u.id === userId);
+    if (!user || user.role === 'admin') return true;
+    const allowed = user.workspaceIds ?? [DEFAULT_WORKSPACE_ID];
+    return allowed.includes(workspaceId);
+  }
+
+  createWorkspace(name: string, description?: string, creatorUserId?: string): Workspace {
     const ws: Workspace = {
       id: `ws-${crypto.randomUUID()}`,
       name,
@@ -562,6 +596,26 @@ class LocalFileStorage {
       isDefault: false,
     };
     this.data.workspaces.push(ws);
+
+    // If non-admin created this workspace, link them to it automatically
+    if (creatorUserId) {
+      const user = this.data.users?.find((u) => u.id === creatorUserId);
+      if (user && user.role !== 'admin') {
+        if (!Array.isArray(user.workspaceIds)) {
+          user.workspaceIds = [DEFAULT_WORKSPACE_ID];
+        }
+        if (!user.workspaceIds.includes(ws.id)) {
+          user.workspaceIds.push(ws.id);
+          this.executeTursoBackground([
+            {
+              sql: `UPDATE users SET workspace_ids = ? WHERE id = ?;`,
+              args: [JSON.stringify(user.workspaceIds), user.id],
+            },
+          ]);
+        }
+      }
+    }
+
     this.saveLocalData(this.data);
 
     this.executeTursoBackground([
@@ -579,6 +633,21 @@ class LocalFileStorage {
     const prevLen = this.data.workspaces.length;
     this.data.workspaces = this.data.workspaces.filter((w) => w.id !== id && !w.isDefault);
     if (this.data.workspaces.length < prevLen) {
+      // Remove deleted workspace from user linked workspaces
+      if (Array.isArray(this.data.users)) {
+        for (const u of this.data.users) {
+          if (Array.isArray(u.workspaceIds) && u.workspaceIds.includes(id)) {
+            u.workspaceIds = u.workspaceIds.filter((wId) => wId !== id);
+            this.executeTursoBackground([
+              {
+                sql: `UPDATE users SET workspace_ids = ? WHERE id = ?;`,
+                args: [JSON.stringify(u.workspaceIds), u.id],
+              },
+            ]);
+          }
+        }
+      }
+
       this.saveLocalData(this.data);
       this.executeTursoBackground([
         { sql: `DELETE FROM workspaces WHERE id = ?;`, args: [id] },
@@ -900,7 +969,10 @@ class LocalFileStorage {
   // Users (Admin-managed, dedicated users table)
   getUsers(): Array<Omit<StoredUser, 'passwordHash' | 'salt'>> {
     if (!Array.isArray(this.data.users)) this.data.users = [];
-    return this.data.users.map(({ passwordHash, salt, ...user }) => user);
+    return this.data.users.map(({ passwordHash, salt, ...user }) => ({
+      ...user,
+      workspaceIds: user.workspaceIds ?? (user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID]),
+    }));
   }
 
   getUserByEmail(email: string): StoredUser | undefined {
@@ -917,12 +989,19 @@ class LocalFileStorage {
           u.email.toLowerCase() === 'admin@company.internal'
       );
     }
+    if (user && user.workspaceIds === undefined) {
+      user.workspaceIds = user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID];
+    }
     return user;
   }
 
   getUserById(id: string): StoredUser | undefined {
     if (!Array.isArray(this.data.users)) this.data.users = [];
-    return this.data.users.find((u) => u.id === id);
+    const user = this.data.users.find((u) => u.id === id);
+    if (user && user.workspaceIds === undefined) {
+      user.workspaceIds = user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID];
+    }
+    return user;
   }
 
   createUser(params: {
@@ -930,6 +1009,7 @@ class LocalFileStorage {
     name: string;
     password: string;
     role?: 'admin' | 'editor' | 'viewer';
+    workspaceIds?: string[];
   }): Omit<StoredUser, 'passwordHash' | 'salt'> {
     if (!Array.isArray(this.data.users)) this.data.users = [];
     const normalizedEmail = params.email.trim().toLowerCase();
@@ -938,15 +1018,21 @@ class LocalFileStorage {
     }
 
     const { hash, salt } = hashPassword(params.password);
+    const role = params.role || 'editor';
+    const workspaceIds = Array.isArray(params.workspaceIds)
+      ? params.workspaceIds
+      : (role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID]);
+
     const newUser: StoredUser = {
       id: `usr-${crypto.randomUUID()}`,
       email: normalizedEmail,
       name: params.name.trim(),
       passwordHash: hash,
       salt,
-      role: params.role || 'editor',
+      role,
       isActive: true,
       createdAt: new Date().toISOString(),
+      workspaceIds,
     };
 
     this.data.users.push(newUser);
@@ -954,8 +1040,8 @@ class LocalFileStorage {
 
     this.executeTursoBackground([
       {
-        sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, 1, ?);`,
+        sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at, workspace_ids)
+              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?);`,
         args: [
           newUser.id,
           newUser.email,
@@ -964,11 +1050,57 @@ class LocalFileStorage {
           newUser.salt,
           newUser.role,
           newUser.createdAt,
+          JSON.stringify(newUser.workspaceIds),
         ],
       },
     ]);
 
     const { passwordHash: _, salt: __, ...sanitized } = newUser;
+    return sanitized;
+  }
+
+  updateUser(
+    id: string,
+    updates: {
+      name?: string;
+      role?: 'admin' | 'editor' | 'viewer';
+      workspaceIds?: string[];
+      isActive?: boolean;
+    }
+  ): Omit<StoredUser, 'passwordHash' | 'salt'> | null {
+    if (!Array.isArray(this.data.users)) this.data.users = [];
+    const user = this.data.users.find((u) => u.id === id);
+    if (!user) return null;
+
+    if (updates.name !== undefined && updates.name.trim()) {
+      user.name = updates.name.trim();
+    }
+    if (updates.role !== undefined) {
+      user.role = updates.role;
+    }
+    if (updates.workspaceIds !== undefined && Array.isArray(updates.workspaceIds)) {
+      user.workspaceIds = updates.workspaceIds;
+    }
+    if (updates.isActive !== undefined) {
+      user.isActive = Boolean(updates.isActive);
+    }
+
+    this.saveLocalData(this.data);
+
+    this.executeTursoBackground([
+      {
+        sql: `UPDATE users SET name = ?, role = ?, is_active = ?, workspace_ids = ? WHERE id = ?;`,
+        args: [
+          user.name,
+          user.role,
+          user.isActive ? 1 : 0,
+          JSON.stringify(user.workspaceIds || []),
+          id,
+        ],
+      },
+    ]);
+
+    const { passwordHash: _, salt: __, ...sanitized } = user;
     return sanitized;
   }
 
@@ -1072,6 +1204,7 @@ class LocalFileStorage {
         role: 'admin',
         isActive: true,
         createdAt: new Date().toISOString(),
+        workspaceIds: this.data.workspaces.map((w) => w.id),
       };
       this.data.users.push(adminUser);
       this.saveLocalData(this.data);

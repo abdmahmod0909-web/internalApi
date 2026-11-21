@@ -193,6 +193,8 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       role: user.role,
     });
 
+    const userWorkspaces = user.workspaceIds ?? (user.role === 'admin' ? db.getWorkspaces().map((w) => w.id) : ['ws-default-company']);
+
     return {
       token,
       user: {
@@ -202,6 +204,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
         role: user.role,
         isActive: user.isActive,
         createdAt: user.createdAt,
+        workspaceIds: userWorkspaces,
       },
     };
   });
@@ -213,6 +216,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!user) {
       throw app.httpErrors.notFound('User not found');
     }
+    const userWorkspaces = user.workspaceIds ?? (user.role === 'admin' ? db.getWorkspaces().map((w) => w.id) : ['ws-default-company']);
     return {
       id: user.id,
       email: user.email,
@@ -220,6 +224,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       role: user.role,
       isActive: user.isActive,
       createdAt: user.createdAt,
+      workspaceIds: userWorkspaces,
     };
   });
 
@@ -255,7 +260,13 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   // Team Management: Create User (Admin only)
   app.post('/api/users', { onRequest: [(app as any).requireAdmin] }, async (req) => {
-    const body = req.body as { email?: string; name?: string; password?: string; role?: 'admin' | 'editor' | 'viewer' };
+    const body = req.body as {
+      email?: string;
+      name?: string;
+      password?: string;
+      role?: 'admin' | 'editor' | 'viewer';
+      workspaceIds?: string[];
+    };
     if (!body?.email || !body?.name || !body?.password) {
       throw app.httpErrors.badRequest('Email, name, and password are required');
     }
@@ -269,11 +280,35 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
         name: body.name,
         password: body.password,
         role: body.role || 'editor',
+        workspaceIds: body.workspaceIds,
       });
       return created;
     } catch (err: any) {
       throw app.httpErrors.badRequest(err.message || 'Failed to create user');
     }
+  });
+
+  // Team Management: Update User Role, Name & Workspaces (Admin only)
+  app.patch('/api/users/:id', { onRequest: [(app as any).requireAdmin] }, async (req) => {
+    const { id } = req.params as { id: string };
+    const requester = (req as any).user;
+    const body = req.body as {
+      name?: string;
+      role?: 'admin' | 'editor' | 'viewer';
+      workspaceIds?: string[];
+      isActive?: boolean;
+    };
+
+    // If an admin is editing themselves, prevent revoking their own admin role
+    if (requester?.id === id && body.role && body.role !== 'admin') {
+      throw app.httpErrors.badRequest('You cannot change your own admin role');
+    }
+
+    const updated = db.updateUser(id, body);
+    if (!updated) {
+      throw app.httpErrors.notFound('User not found');
+    }
+    return updated;
   });
 
   // Team Management: Delete User (Admin only)
@@ -307,8 +342,9 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   });
 
   // Workspaces (Protected: login required)
-  app.get('/api/workspaces', { onRequest: [(app as any).authenticate] }, async () => {
-    return db.getWorkspaces();
+  app.get('/api/workspaces', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
+    return db.getWorkspaces(user?.id, user?.role);
   });
 
   app.post('/api/workspaces', { onRequest: [(app as any).authenticate] }, async (req) => {
@@ -316,26 +352,40 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!body?.name) {
       throw app.httpErrors.badRequest('Workspace name is required');
     }
-    return db.createWorkspace(body.name, body.description);
+    const user = (req as any).user;
+    return db.createWorkspace(body.name, body.description, user?.id);
   });
 
   app.delete('/api/workspaces/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
     const { id } = req.params as { id: string };
+    const user = (req as any).user;
+    if (user?.role !== 'admin' && !db.userHasWorkspaceAccess(user?.id, user?.role, id)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
+    }
     const success = db.deleteWorkspace(id);
     return { success };
   });
 
   // Flows (Protected: login required)
   app.get('/api/flows', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const query = req.query as { workspaceId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
+    }
     return db.getFlows(wsId);
   });
 
   app.post('/api/flows', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Flow name is required');
+    }
+    const wsId = body.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
     return db.saveFlow(body);
   });
@@ -348,15 +398,24 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   // Environments (Protected: login required)
   app.get('/api/environments', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const query = req.query as { workspaceId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
+    }
     return db.getEnvironments(wsId);
   });
 
   app.post('/api/environments', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Environment name is required');
+    }
+    const wsId = body.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
     return db.saveEnvironment(body);
   });
@@ -376,8 +435,12 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   // Collections (Protected: login required)
   app.get('/api/collections', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const query = req.query as { workspaceId?: string; environmentId?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
+    }
 
     if (query.environmentId) {
       const env = db.getEnvironmentRaw(query.environmentId);
@@ -395,10 +458,15 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   });
 
   app.post('/api/collections', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const query = req.query as { environmentId?: string };
     const body = req.body as any;
     if (!body?.name) {
       throw app.httpErrors.badRequest('Collection name is required');
+    }
+    const wsId = body.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
     const saved = db.saveCollection(body);
 
@@ -437,8 +505,12 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
 
   // History (Protected: login required)
   app.get('/api/history', { onRequest: [(app as any).authenticate] }, async (req) => {
+    const user = (req as any).user;
     const query = req.query as { workspaceId?: string; limit?: string };
     const wsId = query.workspaceId || 'ws-default-company';
+    if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
+      throw app.httpErrors.forbidden('You do not have access to this workspace');
+    }
     const limit = query.limit ? parseInt(query.limit, 10) : 30;
     return db.getHistory(wsId, limit);
   });

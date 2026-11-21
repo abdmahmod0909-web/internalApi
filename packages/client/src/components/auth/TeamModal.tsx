@@ -14,8 +14,11 @@ import {
   Key,
   Search,
   Lock,
+  Briefcase,
+  Pencil,
+  Check,
 } from 'lucide-react';
-import type { UserRole } from '@internalapi/shared';
+import type { User, UserRole } from '@internalapi/shared';
 
 export const TeamModal: React.FC = () => {
   const {
@@ -23,8 +26,10 @@ export const TeamModal: React.FC = () => {
     setTeamModalOpen,
     currentUser,
     teamUsers,
+    workspaces,
     fetchTeamUsersAction,
     createTeamUserAction,
+    updateTeamUserAction,
     deleteTeamUserAction,
     adminResetPasswordAction,
   } = useAppStore();
@@ -33,6 +38,7 @@ export const TeamModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('editor');
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,11 +53,24 @@ export const TeamModal: React.FC = () => {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
 
+  // Edit user state
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState<UserRole>('editor');
+  const [editWorkspaceIds, setEditWorkspaceIds] = useState<string[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+
   useEffect(() => {
     if (isTeamModalOpen && currentUser?.role === 'admin') {
       fetchTeamUsersAction();
     }
   }, [isTeamModalOpen, currentUser]);
+
+  useEffect(() => {
+    if (workspaces.length > 0 && selectedWorkspaceIds.length === 0) {
+      setSelectedWorkspaceIds([workspaces[0].id]);
+    }
+  }, [workspaces]);
 
   if (!isTeamModalOpen) return null;
 
@@ -92,6 +111,7 @@ export const TeamModal: React.FC = () => {
         email,
         password,
         role,
+        workspaceIds: role === 'admin' ? workspaces.map((w) => w.id) : selectedWorkspaceIds,
       });
 
       if (res.success) {
@@ -99,6 +119,7 @@ export const TeamModal: React.FC = () => {
         setName('');
         setEmail('');
         setPassword('');
+        setSelectedWorkspaceIds(workspaces.length > 0 ? [workspaces[0].id] : []);
         setIsAddFormOpen(false);
       } else {
         setError(res.error || 'Failed to create user account');
@@ -127,6 +148,7 @@ export const TeamModal: React.FC = () => {
     setResetUserEmail(userEmail);
     setResetNewPassword('');
     setShowResetPassword(false);
+    setEditingUser(null);
     setError(null);
     setSuccess(null);
   };
@@ -155,6 +177,50 @@ export const TeamModal: React.FC = () => {
     }
   };
 
+  const openEditDialog = (user: User) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditRole(user.role);
+    setEditWorkspaceIds(user.workspaceIds || (user.role === 'admin' ? workspaces.map((w) => w.id) : [workspaces[0]?.id].filter(Boolean)));
+    setResetUserId(null);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setIsUpdating(true);
+    setError(null);
+    setSuccess(null);
+
+    const res = await updateTeamUserAction(editingUser.id, {
+      name: editName.trim(),
+      role: editRole,
+      workspaceIds: editRole === 'admin' ? workspaces.map((w) => w.id) : editWorkspaceIds,
+    });
+    setIsUpdating(false);
+
+    if (res.success) {
+      setSuccess(`User "${editingUser.email}" updated successfully!`);
+      setEditingUser(null);
+    } else {
+      setError(res.error || 'Failed to update user');
+    }
+  };
+
+  const toggleCreateWorkspace = (wsId: string) => {
+    setSelectedWorkspaceIds((prev) =>
+      prev.includes(wsId) ? prev.filter((id) => id !== wsId) : [...prev, wsId]
+    );
+  };
+
+  const toggleEditWorkspace = (wsId: string) => {
+    setEditWorkspaceIds((prev) =>
+      prev.includes(wsId) ? prev.filter((id) => id !== wsId) : [...prev, wsId]
+    );
+  };
+
   const filteredUsers = teamUsers.filter(
     (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,7 +230,7 @@ export const TeamModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-3xl bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-4xl bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-950/70 shrink-0">
           <div className="flex items-center space-x-3">
@@ -173,12 +239,12 @@ export const TeamModal: React.FC = () => {
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-semibold text-white">User Management</h2>
+                <h2 className="text-sm font-semibold text-white">User & Workspace Access Management</h2>
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-300 font-mono font-medium">
                   Admin Only
                 </span>
               </div>
-              <p className="text-xs text-gray-400">View team members, reset passwords, create, or delete accounts</p>
+              <p className="text-xs text-gray-400">Manage user accounts, assign roles, link workspaces, and reset passwords</p>
             </div>
           </div>
           <button
@@ -202,6 +268,135 @@ export const TeamModal: React.FC = () => {
             <div className="flex items-center space-x-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>{success}</span>
+            </div>
+          )}
+
+          {/* Edit User Dialog (Inline Overlay) */}
+          {editingUser && (
+            <div className="p-4 bg-gray-950 border border-amber-500/40 rounded-xl space-y-3.5 animate-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-xs font-semibold text-amber-400">
+                  <Pencil className="w-4 h-4" />
+                  <span>Edit User Account & Workspaces: <strong className="text-white font-mono">{editingUser.email}</strong></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="text-gray-500 hover:text-gray-300 text-xs"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateUser} className="space-y-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-gray-400">Full Name</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      required
+                      className="w-full px-2.5 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded text-gray-200 placeholder-gray-600 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-gray-400">Role & Permissions</label>
+                    <select
+                      value={editRole}
+                      disabled={editingUser.id === currentUser?.id}
+                      onChange={(e) => setEditRole(e.target.value as UserRole)}
+                      className="w-full px-2.5 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded text-gray-200 focus:outline-none focus:border-amber-500 cursor-pointer disabled:opacity-50"
+                    >
+                      <option value="editor">Editor (Send requests, edit collections in linked workspaces)</option>
+                      <option value="admin">Admin (Full access to all workspaces + user management)</option>
+                      <option value="viewer">Viewer (Read-only access in linked workspaces)</option>
+                    </select>
+                    {editingUser.id === currentUser?.id && (
+                      <span className="text-[10px] text-gray-500">You cannot demote your own admin account.</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Workspace Assignment in Edit Mode */}
+                <div className="space-y-1.5 pt-1 border-t border-gray-800/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-gray-300 flex items-center space-x-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Linked Workspaces</span>
+                    </label>
+                    {editRole !== 'admin' && (
+                      <span className="text-[10px] text-gray-400">
+                        {editWorkspaceIds.length} of {workspaces.length} linked
+                      </span>
+                    )}
+                  </div>
+
+                  {editRole === 'admin' ? (
+                    <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
+                      Admin role automatically has full access to all existing and future workspaces.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1 bg-gray-900/60 rounded-lg border border-gray-800">
+                      {workspaces.map((ws) => {
+                        const isChecked = editWorkspaceIds.includes(ws.id);
+                        return (
+                          <label
+                            key={ws.id}
+                            onClick={() => toggleEditWorkspace(ws.id)}
+                            className={`flex items-start space-x-2 p-2 rounded cursor-pointer border transition-colors ${
+                              isChecked
+                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                                : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                            }`}
+                          >
+                            <div
+                              className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center shrink-0 border ${
+                                isChecked
+                                  ? 'bg-amber-500 border-amber-500 text-gray-950'
+                                  : 'border-gray-700 bg-gray-950'
+                              }`}
+                            >
+                              {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                            <div className="truncate text-xs">
+                              <div className="font-medium text-gray-200 truncate">{ws.name}</div>
+                              {ws.description && (
+                                <div className="text-[10px] text-gray-500 truncate">{ws.description}</div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingUser(null)}
+                    className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isUpdating || !editName.trim()}
+                    className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow transition-colors flex items-center space-x-1.5"
+                  >
+                    {isUpdating ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
@@ -300,7 +495,7 @@ export const TeamModal: React.FC = () => {
             <form onSubmit={handleCreate} className="p-4 bg-gray-950/80 border border-orange-500/30 rounded-xl space-y-3.5 animate-in slide-in-from-top-2 duration-150">
               <div className="flex items-center space-x-2 text-xs font-semibold text-orange-400">
                 <UserPlus className="w-4 h-4" />
-                <span>Create New User Account</span>
+                <span>Create New User Account & Assign Workspaces</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -357,11 +552,65 @@ export const TeamModal: React.FC = () => {
                     onChange={(e) => setRole(e.target.value as UserRole)}
                     className="w-full px-2.5 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded text-gray-200 focus:outline-none focus:border-orange-500 cursor-pointer"
                   >
-                    <option value="editor">Editor (Send requests, edit collections)</option>
-                    <option value="admin">Admin (Full access + manage users)</option>
-                    <option value="viewer">Viewer (Read-only)</option>
+                    <option value="editor">Editor (Send requests, edit collections in linked workspace)</option>
+                    <option value="admin">Admin (Full access to all workspaces + manage users)</option>
+                    <option value="viewer">Viewer (Read-only access in linked workspace)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Workspace Linking Selector */}
+              <div className="space-y-1.5 pt-1 border-t border-gray-800/80">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-gray-300 flex items-center space-x-1.5">
+                    <Briefcase className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Assign Workspaces (User can only view selected workspaces)</span>
+                  </label>
+                  {role !== 'admin' && (
+                    <span className="text-[10px] text-gray-400">
+                      {selectedWorkspaceIds.length} selected
+                    </span>
+                  )}
+                </div>
+
+                {role === 'admin' ? (
+                  <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
+                    Admin accounts automatically receive access to all workspaces across the system.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-1 bg-gray-900/60 rounded-lg border border-gray-800">
+                    {workspaces.map((ws) => {
+                      const isChecked = selectedWorkspaceIds.includes(ws.id);
+                      return (
+                        <label
+                          key={ws.id}
+                          onClick={() => toggleCreateWorkspace(ws.id)}
+                          className={`flex items-start space-x-2 p-2 rounded cursor-pointer border transition-colors ${
+                            isChecked
+                              ? 'bg-orange-500/10 border-orange-500/40 text-orange-200'
+                              : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded mt-0.5 flex items-center justify-center shrink-0 border ${
+                              isChecked
+                                ? 'bg-orange-500 border-orange-500 text-white'
+                                : 'border-gray-700 bg-gray-950'
+                            }`}
+                          >
+                            {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                          </div>
+                          <div className="truncate text-xs">
+                            <div className="font-medium text-gray-200 truncate">{ws.name}</div>
+                            {ws.description && (
+                              <div className="text-[10px] text-gray-500 truncate">{ws.description}</div>
+                            )}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end pt-1">
@@ -390,6 +639,7 @@ export const TeamModal: React.FC = () => {
                 <tr className="border-b border-gray-800 bg-gray-950/80 text-[11px] font-medium text-gray-400">
                   <th className="py-2.5 px-3">User</th>
                   <th className="py-2.5 px-3">Role</th>
+                  <th className="py-2.5 px-3">Linked Workspaces</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Created</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
@@ -398,7 +648,7 @@ export const TeamModal: React.FC = () => {
               <tbody className="divide-y divide-gray-800/60">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
+                    <td colSpan={6} className="py-8 text-center text-gray-500">
                       No users match your search query.
                     </td>
                   </tr>
@@ -406,13 +656,16 @@ export const TeamModal: React.FC = () => {
                   filteredUsers.map((user) => {
                     const isSelf = user.id === currentUser?.id;
                     const initials = user.name
-                      ? user.name
+                        ? user.name
                           .split(' ')
                           .map((n) => n[0])
                           .join('')
                           .toUpperCase()
                           .slice(0, 2)
                       : 'U';
+
+                    const userWsIds = user.workspaceIds || [];
+                    const assignedWorkspaces = workspaces.filter((w) => userWsIds.includes(w.id));
 
                     return (
                       <tr key={user.id} className="hover:bg-gray-800/30 transition-colors">
@@ -453,6 +706,30 @@ export const TeamModal: React.FC = () => {
                         </td>
 
                         <td className="py-2.5 px-3">
+                          {user.role === 'admin' ? (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                              <Briefcase className="w-2.5 h-2.5 text-purple-400" />
+                              <span>All Workspaces (Admin)</span>
+                            </span>
+                          ) : assignedWorkspaces.length > 0 ? (
+                            <div className="flex flex-wrap gap-1 max-w-xs">
+                              {assignedWorkspaces.map((ws) => (
+                                <span
+                                  key={ws.id}
+                                  className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] bg-orange-500/10 text-orange-300 border border-orange-500/20 font-medium truncate max-w-[130px]"
+                                  title={ws.name}
+                                >
+                                  <Briefcase className="w-2.5 h-2.5 text-orange-400 shrink-0" />
+                                  <span className="truncate">{ws.name}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-gray-500 italic">No workspace linked</span>
+                          )}
+                        </td>
+
+                        <td className="py-2.5 px-3">
                           <span className="inline-flex items-center space-x-1 text-emerald-400 text-[11px]">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             <span>Active</span>
@@ -465,6 +742,16 @@ export const TeamModal: React.FC = () => {
 
                         <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end space-x-1">
+                            {/* Edit User Button */}
+                            <button
+                              onClick={() => openEditDialog(user)}
+                              className="px-2 py-1 text-[11px] text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors flex items-center space-x-1"
+                              title="Edit user details, role, and workspace access"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+
                             {/* Reset Password Button */}
                             <button
                               onClick={() => openResetDialog(user.id, user.email)}
@@ -472,7 +759,7 @@ export const TeamModal: React.FC = () => {
                               title="Reset this user's password"
                             >
                               <Key className="w-3 h-3" />
-                              <span className="hidden sm:inline">Reset Pwd</span>
+                              <span className="hidden sm:inline">Reset</span>
                             </button>
 
                             {/* Delete User Button (Disabled for self) */}

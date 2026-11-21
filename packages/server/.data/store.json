@@ -1,12 +1,5 @@
 {
-  "workspaces": [
-    {
-      "id": "ws-default-company",
-      "name": "Company Internal APIs",
-      "description": "Default company workspace for internal and microservice testing",
-      "isDefault": true
-    }
-  ],
+  "workspaces": [],
   "environments": [
     {
       "id": "env-development",
@@ -5945,6 +5938,26 @@
   ],
   "history": [
     {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-410d14ec-11be-42ee-8641-17a6b67dfece",
+      "createdAt": "2026-11-21T06:29:45.779Z"
+    },
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://httpbin.org/get",
+      "status": 0,
+      "size": 0,
+      "time": 0,
+      "id": "hist-f5202369-59f6-408d-9788-943d944955c0",
+      "createdAt": "2026-11-21T06:29:11.274Z"
+    },
+    {
       "id": "hist-78d7d32d-c878-4b7f-98e0-bfe82f68de80",
       "workspaceId": "ws-default-company",
       "method": "POST",
@@ -6205,7 +6218,10 @@
       "salt": "default-admin-salt",
       "role": "admin",
       "isActive": true,
-      "createdAt": "2026-11-18T10:01:54.961Z"
+      "createdAt": "2026-11-18T10:01:54.961Z",
+      "workspaceIds": [
+        "ws-default-company"
+      ]
     },
     {
       "id": "usr-c26188fe-388b-4474-8f05-504bb28371c9",
