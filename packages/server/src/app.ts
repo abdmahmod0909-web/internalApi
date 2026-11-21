@@ -7,8 +7,8 @@ import fastifyStatic from '@fastify/static';
 import fastifyJwt from '@fastify/jwt';
 import path from 'node:path';
 import fs from 'node:fs';
-import { interpolateDeep } from '@internalapi/shared';
-import type { ApiRequestData } from '@internalapi/shared';
+import { interpolateDeep, resolveUserPermissions } from '@internalapi/shared';
+import type { ApiRequestData, UserPermissions } from '@internalapi/shared';
 import { db, verifyPassword } from './storage/db.js';
 import {
   testDatabaseConnection,
@@ -86,6 +86,15 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       reply.status(401).send({ error: 'Unauthorized: Invalid or missing token' });
     }
   });
+
+  const checkUserPermission = (req: any, permission: keyof UserPermissions): boolean => {
+    const user = (req as any).user;
+    if (!user) return true; // Standalone or unauthenticated mode
+    if (user.role === 'admin') return true;
+    const dbUser = user.id ? db.getUserById(user.id) : null;
+    const perms = resolveUserPermissions(dbUser || user);
+    return Boolean(perms[permission]);
+  };
 
   // Serve static client build if present (Smart OTA & Bundled version resolution)
   const otaPath = getOtaDistPath();
@@ -186,11 +195,13 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       throw app.httpErrors.forbidden('Account is deactivated. Please contact your administrator.');
     }
 
+    const userPerms = resolveUserPermissions(user);
     const token = app.jwt.sign({
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
+      permissions: userPerms,
     });
 
     const userWorkspaces = user.workspaceIds ?? (user.role === 'admin' ? db.getWorkspaces().map((w) => w.id) : ['ws-default-company']);
@@ -205,6 +216,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
         isActive: user.isActive,
         createdAt: user.createdAt,
         workspaceIds: userWorkspaces,
+        permissions: userPerms,
       },
     };
   });
@@ -217,6 +229,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       throw app.httpErrors.notFound('User not found');
     }
     const userWorkspaces = user.workspaceIds ?? (user.role === 'admin' ? db.getWorkspaces().map((w) => w.id) : ['ws-default-company']);
+    const userPerms = resolveUserPermissions(user);
     return {
       id: user.id,
       email: user.email,
@@ -225,6 +238,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       isActive: user.isActive,
       createdAt: user.createdAt,
       workspaceIds: userWorkspaces,
+      permissions: userPerms,
     };
   });
 
@@ -266,6 +280,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       password?: string;
       role?: 'admin' | 'editor' | 'viewer';
       workspaceIds?: string[];
+      permissions?: Partial<UserPermissions>;
     };
     if (!body?.email || !body?.name || !body?.password) {
       throw app.httpErrors.badRequest('Email, name, and password are required');
@@ -281,6 +296,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
         password: body.password,
         role: body.role || 'editor',
         workspaceIds: body.workspaceIds,
+        permissions: body.permissions,
       });
       return created;
     } catch (err: any) {
@@ -297,6 +313,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       role?: 'admin' | 'editor' | 'viewer';
       workspaceIds?: string[];
       isActive?: boolean;
+      permissions?: Partial<UserPermissions>;
     };
 
     // If an admin is editing themselves, prevent revoking their own admin role
@@ -387,10 +404,18 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
       throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
+    const existing = body.id ? db.getFlow(body.id) : null;
+    const requiredPermission = existing ? 'canEdit' : 'canAdd';
+    if (!checkUserPermission(req, requiredPermission)) {
+      throw app.httpErrors.forbidden(`You do not have permission to ${existing ? 'edit' : 'add'} flows`);
+    }
     return db.saveFlow(body);
   });
 
   app.delete('/api/flows/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
+    if (!checkUserPermission(req, 'canDelete')) {
+      throw app.httpErrors.forbidden('You do not have permission to delete flows');
+    }
     const { id } = req.params as { id: string };
     const success = db.deleteFlow(id);
     return { success };
@@ -417,10 +442,18 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
       throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
+    const existing = body.id ? db.getEnvironmentRaw(body.id) : null;
+    const requiredPermission = existing ? 'canEdit' : 'canAdd';
+    if (!checkUserPermission(req, requiredPermission)) {
+      throw app.httpErrors.forbidden(`You do not have permission to ${existing ? 'edit' : 'add'} environments`);
+    }
     return db.saveEnvironment(body);
   });
 
   app.delete('/api/environments/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
+    if (!checkUserPermission(req, 'canDelete')) {
+      throw app.httpErrors.forbidden('You do not have permission to delete environments');
+    }
     const { id } = req.params as { id: string };
     const success = db.deleteEnvironment(id);
     return { success };
@@ -468,6 +501,11 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     if (!db.userHasWorkspaceAccess(user?.id, user?.role, wsId)) {
       throw app.httpErrors.forbidden('You do not have access to this workspace');
     }
+    const existing = body.id ? db.getCollection(body.id) : null;
+    const requiredPermission = existing ? 'canEdit' : 'canAdd';
+    if (!checkUserPermission(req, requiredPermission)) {
+      throw app.httpErrors.forbidden(`You do not have permission to ${existing ? 'edit' : 'add'} collections`);
+    }
     const saved = db.saveCollection(body);
 
     if (query.environmentId) {
@@ -485,6 +523,9 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   });
 
   app.delete('/api/collections/:id', { onRequest: [(app as any).authenticate] }, async (req) => {
+    if (!checkUserPermission(req, 'canDelete')) {
+      throw app.httpErrors.forbidden('You do not have permission to delete collections');
+    }
     const { id } = req.params as { id: string };
     const query = req.query as { environmentId?: string };
     const success = db.deleteCollection(id);

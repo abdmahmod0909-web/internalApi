@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import type { HttpMethod } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
+import { ConfirmDeleteModal, DeleteTarget } from './common/ConfirmDeleteModal.js';
 
 function getMethodColor(method: HttpMethod | string): string {
   switch (method) {
@@ -67,6 +68,9 @@ export const Sidebar: React.FC = () => {
   const [editingReqId, setEditingReqId] = useState<string | null>(null);
   const [editingReqName, setEditingReqName] = useState('');
 
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const {
     collections,
     history,
@@ -90,7 +94,29 @@ export const Sidebar: React.FC = () => {
     setActiveView,
     currentUser,
     setLoginModalOpen,
+    getUserPermissions,
   } = useAppStore();
+
+  const userPerms = getUserPermissions();
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      if (deleteTarget.type === 'collection') {
+        await deleteCollection(deleteTarget.id);
+      } else if (deleteTarget.type === 'folder' && deleteTarget.collectionId) {
+        await deleteFolder(deleteTarget.collectionId, deleteTarget.id);
+      } else if (deleteTarget.type === 'request' && deleteTarget.collectionId) {
+        await deleteRequestFromCollection(deleteTarget.collectionId, deleteTarget.folderId ?? null, deleteTarget.id);
+      } else if (deleteTarget.type === 'flow') {
+        await deleteFlow(deleteTarget.id);
+      }
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   useEffect(() => {
     if (activeView === 'flows') {
@@ -419,14 +445,16 @@ export const Sidebar: React.FC = () => {
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
               <span>Collections ({isSearching ? `${filteredCollections.length} of ${collections.length}` : collections.length})</span>
-              <button
-                onClick={handleCreateCollection}
-                className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
-                title="Create New Collection"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
+              {userPerms.canAdd && (
+                <button
+                  onClick={handleCreateCollection}
+                  className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
+                  title="Create New Collection"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New</span>
+                </button>
+              )}
             </div>
 
             {/* Inline New Collection Input */}
@@ -537,30 +565,34 @@ export const Sidebar: React.FC = () => {
 
                       {/* Quick action buttons on collection row */}
                       <div className="flex items-center space-x-0.5 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddingFolderColId(col.id);
-                            setNewFolderName('');
-                            setCollapsedFolders((prev) => ({ ...prev, [col.id]: false }));
-                          }}
-                          className="p-1 hover:text-amber-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
-                          title="Add sub-folder to this collection"
-                        >
-                          <FolderPlus className="w-3.5 h-3.5 text-amber-500" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setAddingReqTarget({ colId: col.id, folderId: null });
-                            setNewReqName('');
-                            setCollapsedFolders((prev) => ({ ...prev, [col.id]: false }));
-                          }}
-                          className="p-1 hover:text-emerald-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
-                          title="Add request to this collection"
-                        >
-                          <FilePlus className="w-3.5 h-3.5 text-emerald-400" />
-                        </button>
+                        {userPerms.canAdd && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAddingFolderColId(col.id);
+                              setNewFolderName('');
+                              setCollapsedFolders((prev) => ({ ...prev, [col.id]: false }));
+                            }}
+                            className="p-1 hover:text-amber-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                            title="Add sub-folder to this collection"
+                          >
+                            <FolderPlus className="w-3.5 h-3.5 text-amber-500" />
+                          </button>
+                        )}
+                        {userPerms.canAdd && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAddingReqTarget({ colId: col.id, folderId: null });
+                              setNewReqName('');
+                              setCollapsedFolders((prev) => ({ ...prev, [col.id]: false }));
+                            }}
+                            className="p-1 hover:text-emerald-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                            title="Add request to this collection"
+                          >
+                            <FilePlus className="w-3.5 h-3.5 text-emerald-400" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -571,27 +603,38 @@ export const Sidebar: React.FC = () => {
                         >
                           <Download className="w-3 h-3" />
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingColId(col.id);
-                            setEditingColName(col.name);
-                          }}
-                          className="p-1 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
-                          title="Rename Collection"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteCollection(col.id);
-                          }}
-                          className="p-1 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
-                          title={`Delete collection "${col.name}"`}
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        {userPerms.canEdit && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingColId(col.id);
+                              setEditingColName(col.name);
+                            }}
+                            className="p-1 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                            title="Rename Collection"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        )}
+                        {userPerms.canDelete && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const foldersCount = col.folders?.length || 0;
+                              const requestsCount = (col.requests?.length || 0) + (col.folders || []).reduce((acc, f) => acc + (f.requests?.length || 0), 0);
+                              setDeleteTarget({
+                                type: 'collection',
+                                id: col.id,
+                                name: col.name,
+                                subcount: { folders: foldersCount, requests: requestsCount },
+                              });
+                            }}
+                            className="p-1 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded transition-colors"
+                            title={`Delete collection "${col.name}"`}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -742,39 +785,51 @@ export const Sidebar: React.FC = () => {
 
                               {/* Folder Actions (Add Request, Rename, Delete) */}
                               <div className="flex items-center space-x-0.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAddingReqTarget({ colId: col.id, folderId: fld.id });
-                                    setNewReqName('');
-                                    setCollapsedFolders((prev) => ({ ...prev, [fld.id]: false }));
-                                  }}
-                                  className="p-1 hover:text-emerald-400 hover:bg-gray-800 text-gray-400 rounded"
-                                  title="Add Request to Folder"
-                                >
-                                  <FilePlus className="w-3 h-3 text-emerald-400" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingFolderId(fld.id);
-                                    setEditingFolderName(fld.name);
-                                  }}
-                                  className="p-1 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
-                                  title="Rename Folder"
-                                >
-                                  <Edit3 className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteFolder(col.id, fld.id);
-                                  }}
-                                  className="p-1 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
-                                  title="Delete Folder"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                                {userPerms.canAdd && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddingReqTarget({ colId: col.id, folderId: fld.id });
+                                      setNewReqName('');
+                                      setCollapsedFolders((prev) => ({ ...prev, [fld.id]: false }));
+                                    }}
+                                    className="p-1 hover:text-emerald-400 hover:bg-gray-800 text-gray-400 rounded"
+                                    title="Add Request to Folder"
+                                  >
+                                    <FilePlus className="w-3 h-3 text-emerald-400" />
+                                  </button>
+                                )}
+                                {userPerms.canEdit && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingFolderId(fld.id);
+                                      setEditingFolderName(fld.name);
+                                    }}
+                                    className="p-1 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
+                                    title="Rename Folder"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {userPerms.canDelete && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget({
+                                        type: 'folder',
+                                        id: fld.id,
+                                        collectionId: col.id,
+                                        name: fld.name,
+                                        count: fld.requests?.length || 0,
+                                      });
+                                    }}
+                                    className="p-1 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
+                                    title="Delete Folder"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -856,27 +911,38 @@ export const Sidebar: React.FC = () => {
                                         </div>
 
                                         <div className="flex items-center space-x-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setEditingReqId(reqId);
-                                              setEditingReqName(req.name || 'Untitled Request');
-                                            }}
-                                            className="p-0.5 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
-                                            title="Rename Request"
-                                          >
-                                            <Edit3 className="w-3 h-3" />
-                                          </button>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              deleteRequestFromCollection(col.id, fld.id, reqId);
-                                            }}
-                                            className="p-0.5 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
-                                            title="Delete Request"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
+                                          {userPerms.canEdit && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditingReqId(reqId);
+                                                setEditingReqName(req.name || 'Untitled Request');
+                                              }}
+                                              className="p-0.5 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
+                                              title="Rename Request"
+                                            >
+                                              <Edit3 className="w-3 h-3" />
+                                            </button>
+                                          )}
+                                          {userPerms.canDelete && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteTarget({
+                                                  type: 'request',
+                                                  id: reqId,
+                                                  collectionId: col.id,
+                                                  folderId: fld.id,
+                                                  name: req.name || 'Untitled Request',
+                                                  method: req.method,
+                                                });
+                                              }}
+                                              className="p-0.5 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
+                                              title="Delete Request"
+                                            >
+                                              <Trash2 className="w-3 h-3" />
+                                            </button>
+                                          )}
                                         </div>
                                       </div>
                                     )}
@@ -933,27 +999,38 @@ export const Sidebar: React.FC = () => {
                                 </div>
 
                                 <div className="flex items-center space-x-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setEditingReqId(reqId);
-                                      setEditingReqName(req.name || 'Untitled Request');
-                                    }}
-                                    className="p-0.5 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
-                                    title="Rename Request"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      deleteRequestFromCollection(col.id, null, reqId);
-                                    }}
-                                    className="p-0.5 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
-                                    title="Delete Request"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                  {userPerms.canEdit && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingReqId(reqId);
+                                        setEditingReqName(req.name || 'Untitled Request');
+                                      }}
+                                      className="p-0.5 hover:text-blue-400 hover:bg-gray-800 text-gray-400 rounded"
+                                      title="Rename Request"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {userPerms.canDelete && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTarget({
+                                          type: 'request',
+                                          id: reqId,
+                                          collectionId: col.id,
+                                          folderId: null,
+                                          name: req.name || 'Untitled Request',
+                                          method: req.method,
+                                        });
+                                      }}
+                                      className="p-0.5 hover:text-rose-400 hover:bg-gray-800 text-gray-400 rounded"
+                                      title="Delete Request"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -973,25 +1050,29 @@ export const Sidebar: React.FC = () => {
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
               <span>Workflows ({flows.length})</span>
-              <button
-                onClick={() => createFlow('New API Flow', '', 'blank')}
-                className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
-                title="Create New Flow"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>New</span>
-              </button>
+              {userPerms.canAdd && (
+                <button
+                  onClick={() => createFlow('New API Flow', '', 'blank')}
+                  className="hover:text-orange-400 p-1 rounded hover:bg-gray-900 text-gray-400 flex items-center space-x-1 text-xs"
+                  title="Create New Flow"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New</span>
+                </button>
+              )}
             </div>
 
             {filteredFlows.length === 0 ? (
               <div className="text-center py-8 px-4 text-xs text-gray-500 space-y-3">
                 <p>No API flows created yet in this workspace.</p>
-                <button
-                  onClick={() => createFlow('My First Flow', '', 'blank')}
-                  className="px-3 py-1.5 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded text-xs transition-colors"
-                >
-                  + Create Your First Flow
-                </button>
+                {userPerms.canAdd && (
+                  <button
+                    onClick={() => createFlow('My First Flow', '', 'blank')}
+                    className="px-3 py-1.5 bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 rounded text-xs transition-colors"
+                  >
+                    + Create Your First Flow
+                  </button>
+                )}
               </div>
             ) : (
               filteredFlows.map((flow) => {
@@ -1019,18 +1100,22 @@ export const Sidebar: React.FC = () => {
                       </div>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete flow "${flow.name}"?`)) {
-                          deleteFlow(flow.id);
-                        }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-gray-500 rounded transition-opacity"
-                      title="Delete Flow"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    {userPerms.canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget({
+                            type: 'flow',
+                            id: flow.id,
+                            name: flow.name,
+                          });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-400 text-gray-500 rounded transition-opacity"
+                        title="Delete Flow"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })
@@ -1098,6 +1183,14 @@ export const Sidebar: React.FC = () => {
           </>
         )}
       </div>
+
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        target={deleteTarget}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        isDeleting={isDeleting}
+      />
     </aside>
   );
 };

@@ -247,6 +247,12 @@ export interface FlowExecutionReport {
 // User & Authentication Types (Admin-managed, Login-only)
 export type UserRole = 'admin' | 'editor' | 'viewer';
 
+export interface UserPermissions {
+  canAdd: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -255,6 +261,27 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   workspaceIds?: string[];
+  permissions?: UserPermissions;
+}
+
+export function resolveUserPermissions(user?: { role?: UserRole; permissions?: Partial<UserPermissions> } | null): UserPermissions {
+  if (!user) {
+    return { canAdd: true, canEdit: true, canDelete: true };
+  }
+  if (user.role === 'admin') {
+    return { canAdd: true, canEdit: true, canDelete: true };
+  }
+  const roleDefaults: Record<UserRole, UserPermissions> = {
+    admin: { canAdd: true, canEdit: true, canDelete: true },
+    editor: { canAdd: true, canEdit: true, canDelete: true },
+    viewer: { canAdd: false, canEdit: false, canDelete: false },
+  };
+  const base = roleDefaults[user.role as UserRole] || roleDefaults.editor;
+  return {
+    canAdd: user.permissions?.canAdd !== undefined ? Boolean(user.permissions.canAdd) : base.canAdd,
+    canEdit: user.permissions?.canEdit !== undefined ? Boolean(user.permissions.canEdit) : base.canEdit,
+    canDelete: user.permissions?.canDelete !== undefined ? Boolean(user.permissions.canDelete) : base.canDelete,
+  };
 }
 
 export interface AuthSession {

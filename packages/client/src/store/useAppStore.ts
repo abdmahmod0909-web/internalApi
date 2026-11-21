@@ -16,8 +16,9 @@ import type {
   FlowStepLog,
   User,
   UserRole,
+  UserPermissions,
 } from '@internalapi/shared';
-import { executeScript, interpolateVariables } from '@internalapi/shared';
+import { executeScript, interpolateVariables, resolveUserPermissions } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
 
 export interface TabItem {
@@ -127,13 +128,14 @@ interface AppState {
   loginAction: (email: string, password: string, serverUrl?: string) => Promise<{ success: boolean; error?: string }>;
   logoutAction: () => void;
   fetchTeamUsersAction: () => Promise<void>;
-  createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole; workspaceIds?: string[] }) => Promise<{ success: boolean; error?: string }>;
-  updateTeamUserAction: (id: string, data: { name?: string; role?: UserRole; workspaceIds?: string[]; isActive?: boolean }) => Promise<{ success: boolean; error?: string }>;
+  createTeamUserAction: (data: { email: string; name: string; password: string; role?: UserRole; workspaceIds?: string[]; permissions?: Partial<UserPermissions> }) => Promise<{ success: boolean; error?: string }>;
+  updateTeamUserAction: (id: string, data: { name?: string; role?: UserRole; workspaceIds?: string[]; isActive?: boolean; permissions?: Partial<UserPermissions> }) => Promise<{ success: boolean; error?: string }>;
   deleteTeamUserAction: (id: string) => Promise<{ success: boolean; error?: string }>;
   adminResetPasswordAction: (userId: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   updateProfileAction: (params: { name?: string; oldPassword?: string; newPassword?: string }) => Promise<{ success: boolean; error?: string }>;
   syncLocalToCloudAction: () => Promise<{ success: boolean; message: string }>;
   syncCloudToLocalAction: () => Promise<{ success: boolean; message: string }>;
+  getUserPermissions: () => UserPermissions;
 
   // Actions
   setCommandPaletteOpen: (open: boolean) => void;
@@ -596,6 +598,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ syncStatus: 'error', syncMessage: err.message || 'Sync failed' });
       return { success: false, message: err.message || 'Sync failed' };
     }
+  },
+
+  getUserPermissions: () => {
+    return resolveUserPermissions(get().currentUser);
   },
 
   checkOtaUpdates: async () => {
@@ -1318,6 +1324,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createCollection: async (name) => {
+    if (!get().getUserPermissions().canAdd) {
+      console.warn('Action blocked: user lacks add permission');
+      return;
+    }
     const { activeWorkspaceId } = get();
     const newCol: Collection = {
       id: `col-${Date.now()}`,
@@ -1341,6 +1351,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteCollection: async (id) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
     await apiFetch(`/api/collections/${id}${envParam}`, { method: 'DELETE' });
     const next = get().collections.filter((c) => c.id !== id);
@@ -1350,6 +1364,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   renameCollection: async (id, name) => {
+    if (!get().getUserPermissions().canEdit) {
+      console.warn('Action blocked: user lacks edit permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === id);
     if (!col) return;
     const updated = { ...col, name };
@@ -1367,6 +1385,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addFolder: async (collectionId, folderName) => {
+    if (!get().getUserPermissions().canAdd) {
+      console.warn('Action blocked: user lacks add permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const newFolder: Folder = {
@@ -1393,6 +1415,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   renameFolder: async (collectionId, folderId, name) => {
+    if (!get().getUserPermissions().canEdit) {
+      console.warn('Action blocked: user lacks edit permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const updated = {
@@ -1412,6 +1438,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteFolder: async (collectionId, folderId) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const updated = {
@@ -1431,6 +1461,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addRequestToCollection: async (collectionId, folderId, name = 'New Request') => {
+    if (!get().getUserPermissions().canAdd) {
+      console.warn('Action blocked: user lacks add permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const newReq: ApiRequestData = {
@@ -1462,6 +1496,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteRequestFromCollection: async (collectionId, folderId, requestId) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const updated = { ...col };
@@ -1601,6 +1639,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createFlow: async (name = 'New API Flow', description = '', template = 'blank') => {
+    if (!get().getUserPermissions().canAdd) {
+      console.warn('Action blocked: user lacks add permission');
+      return undefined;
+    }
     const { activeWorkspaceId } = get();
     let initialNodes: FlowNode[] = [];
 
@@ -1797,6 +1839,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteFlow: async (id: string) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     try {
       await apiFetch(`/api/flows/${id}`, { method: 'DELETE' });
       set((state) => ({

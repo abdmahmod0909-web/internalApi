@@ -10,7 +10,9 @@ import type {
   Environment,
   EnvironmentVariable,
   Flow,
+  UserPermissions,
 } from '@internalapi/shared';
+import { resolveUserPermissions } from '@internalapi/shared';
 import { encryptSecret, decryptSecret } from '../crypto/encryption.js';
 
 // Ensure environment variables are loaded across all candidate paths
@@ -30,6 +32,11 @@ export interface StoredUser {
   isActive: boolean;
   createdAt: string;
   workspaceIds?: string[];
+  permissions?: {
+    canAdd?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
+  };
 }
 
 export function hashPassword(password: string, salt = crypto.randomBytes(16).toString('hex')): { hash: string; salt: string } {
@@ -366,7 +373,8 @@ class LocalFileStorage {
                 role TEXT NOT NULL DEFAULT 'editor',
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
-                workspace_ids TEXT
+                workspace_ids TEXT,
+                permissions TEXT
               );`,
             },
             {
@@ -428,9 +436,12 @@ class LocalFileStorage {
             { sql: `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);` },
           ]);
 
-          // Attempt adding workspace_ids column if users table was created previously without it
+          // Attempt adding workspace_ids and permissions columns if users table was created previously without them
           try {
             await this.executeTurso([{ sql: `ALTER TABLE users ADD COLUMN workspace_ids TEXT;` }]);
+          } catch (_) {}
+          try {
+            await this.executeTurso([{ sql: `ALTER TABLE users ADD COLUMN permissions TEXT;` }]);
           } catch (_) {}
 
           // 2. Fetch all rows from dedicated tables
@@ -468,6 +479,13 @@ class LocalFileStorage {
                   if (Array.isArray(parsed)) wsIds = parsed;
                 } catch (_) {}
               }
+              let perms: UserPermissions | undefined = undefined;
+              if (r.permissions) {
+                try {
+                  const parsed = JSON.parse(r.permissions);
+                  if (parsed && typeof parsed === 'object') perms = parsed;
+                } catch (_) {}
+              }
               return {
                 id: r.id,
                 email: r.email,
@@ -478,6 +496,7 @@ class LocalFileStorage {
                 isActive: r.is_active === '1' || r.is_active === 1 || r.is_active === true,
                 createdAt: r.created_at,
                 workspaceIds: wsIds,
+                permissions: perms,
               };
             });
           }
@@ -972,6 +991,7 @@ class LocalFileStorage {
     return this.data.users.map(({ passwordHash, salt, ...user }) => ({
       ...user,
       workspaceIds: user.workspaceIds ?? (user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID]),
+      permissions: resolveUserPermissions(user),
     }));
   }
 
@@ -992,6 +1012,9 @@ class LocalFileStorage {
     if (user && user.workspaceIds === undefined) {
       user.workspaceIds = user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID];
     }
+    if (user && user.permissions === undefined) {
+      user.permissions = resolveUserPermissions(user);
+    }
     return user;
   }
 
@@ -1000,6 +1023,9 @@ class LocalFileStorage {
     const user = this.data.users.find((u) => u.id === id);
     if (user && user.workspaceIds === undefined) {
       user.workspaceIds = user.role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID];
+    }
+    if (user && user.permissions === undefined) {
+      user.permissions = resolveUserPermissions(user);
     }
     return user;
   }
@@ -1010,6 +1036,11 @@ class LocalFileStorage {
     password: string;
     role?: 'admin' | 'editor' | 'viewer';
     workspaceIds?: string[];
+    permissions?: {
+      canAdd?: boolean;
+      canEdit?: boolean;
+      canDelete?: boolean;
+    };
   }): Omit<StoredUser, 'passwordHash' | 'salt'> {
     if (!Array.isArray(this.data.users)) this.data.users = [];
     const normalizedEmail = params.email.trim().toLowerCase();
@@ -1022,6 +1053,7 @@ class LocalFileStorage {
     const workspaceIds = Array.isArray(params.workspaceIds)
       ? params.workspaceIds
       : (role === 'admin' ? this.data.workspaces.map((w) => w.id) : [DEFAULT_WORKSPACE_ID]);
+    const permissions = resolveUserPermissions({ role, permissions: params.permissions });
 
     const newUser: StoredUser = {
       id: `usr-${crypto.randomUUID()}`,
@@ -1033,6 +1065,7 @@ class LocalFileStorage {
       isActive: true,
       createdAt: new Date().toISOString(),
       workspaceIds,
+      permissions,
     };
 
     this.data.users.push(newUser);
@@ -1040,8 +1073,8 @@ class LocalFileStorage {
 
     this.executeTursoBackground([
       {
-        sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at, workspace_ids)
-              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?);`,
+        sql: `INSERT INTO users (id, email, name, password_hash, salt, role, is_active, created_at, workspace_ids, permissions)
+              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?);`,
         args: [
           newUser.id,
           newUser.email,
@@ -1051,6 +1084,7 @@ class LocalFileStorage {
           newUser.role,
           newUser.createdAt,
           JSON.stringify(newUser.workspaceIds),
+          JSON.stringify(newUser.permissions),
         ],
       },
     ]);
@@ -1066,6 +1100,11 @@ class LocalFileStorage {
       role?: 'admin' | 'editor' | 'viewer';
       workspaceIds?: string[];
       isActive?: boolean;
+      permissions?: {
+        canAdd?: boolean;
+        canEdit?: boolean;
+        canDelete?: boolean;
+      };
     }
   ): Omit<StoredUser, 'passwordHash' | 'salt'> | null {
     if (!Array.isArray(this.data.users)) this.data.users = [];
@@ -1084,17 +1123,23 @@ class LocalFileStorage {
     if (updates.isActive !== undefined) {
       user.isActive = Boolean(updates.isActive);
     }
+    if (updates.permissions !== undefined) {
+      user.permissions = resolveUserPermissions({ role: user.role, permissions: updates.permissions });
+    } else if (updates.role !== undefined && !user.permissions) {
+      user.permissions = resolveUserPermissions({ role: user.role });
+    }
 
     this.saveLocalData(this.data);
 
     this.executeTursoBackground([
       {
-        sql: `UPDATE users SET name = ?, role = ?, is_active = ?, workspace_ids = ? WHERE id = ?;`,
+        sql: `UPDATE users SET name = ?, role = ?, is_active = ?, workspace_ids = ?, permissions = ? WHERE id = ?;`,
         args: [
           user.name,
           user.role,
           user.isActive ? 1 : 0,
           JSON.stringify(user.workspaceIds || []),
+          JSON.stringify(user.permissions || resolveUserPermissions(user)),
           id,
         ],
       },

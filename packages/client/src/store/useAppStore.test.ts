@@ -139,5 +139,52 @@ describe('Client Zustand Store', () => {
     store.setCloseUnsavedPreference('ask');
     expect(useAppStore.getState().closeUnsavedPreference).toBe('ask');
   });
+
+  it('correctly resolves and enforces user permissions (add, edit, delete)', async () => {
+    const store = useAppStore.getState();
+
+    // 1. Viewer role has all false by default
+    useAppStore.setState({
+      currentUser: {
+        id: 'usr-viewer',
+        email: 'viewer@company.com',
+        name: 'Viewer User',
+        role: 'viewer',
+        isActive: true,
+        createdAt: '2026-01-01',
+      },
+    });
+
+    const viewerPerms = useAppStore.getState().getUserPermissions();
+    expect(viewerPerms.canAdd).toBe(false);
+    expect(viewerPerms.canEdit).toBe(false);
+    expect(viewerPerms.canDelete).toBe(false);
+
+    // 2. Custom permissions overrides role defaults
+    useAppStore.setState({
+      currentUser: {
+        id: 'usr-custom',
+        email: 'custom@company.com',
+        name: 'Custom User',
+        role: 'editor',
+        isActive: true,
+        createdAt: '2026-01-01',
+        permissions: { canAdd: true, canEdit: true, canDelete: false },
+      },
+    });
+
+    const customPerms = useAppStore.getState().getUserPermissions();
+    expect(customPerms.canAdd).toBe(true);
+    expect(customPerms.canEdit).toBe(true);
+    expect(customPerms.canDelete).toBe(false);
+
+    // Attempting delete when canDelete is false is blocked
+    const initialCols = [
+      { id: 'col-protected', workspaceId: 'ws-default', name: 'Protected Col', folders: [], requests: [] },
+    ];
+    useAppStore.setState({ collections: initialCols as any });
+    await store.deleteCollection('col-protected');
+    expect(useAppStore.getState().collections.some((c) => c.id === 'col-protected')).toBe(true);
+  });
 });
 

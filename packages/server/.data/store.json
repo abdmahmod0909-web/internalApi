@@ -6221,7 +6221,12 @@
       "createdAt": "2026-11-18T10:01:54.961Z",
       "workspaceIds": [
         "ws-default-company"
-      ]
+      ],
+      "permissions": {
+        "canAdd": true,
+        "canEdit": true,
+        "canDelete": true
+      }
     },
     {
       "id": "usr-c26188fe-388b-4474-8f05-504bb28371c9",

@@ -296,4 +296,166 @@ describe('Fastify Server Integration Tests', () => {
       });
     });
   });
+
+  describe('Granular User Permissions Enforcement (canAdd, canEdit, canDelete)', () => {
+    let permsUserId: string;
+    let permsUserToken: string;
+    const testColId = 'col-perms-test-123';
+
+    it('admin creates an editor user with restricted permissions (canAdd: true, canEdit: false, canDelete: false)', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/users',
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          email: 'perms.test@company.internal',
+          name: 'Permissions Test User',
+          password: 'password123',
+          role: 'editor',
+          permissions: {
+            canAdd: true,
+            canEdit: false,
+            canDelete: false,
+          },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const user = JSON.parse(res.payload);
+      expect(user.email).toBe('perms.test@company.internal');
+      expect(user.permissions).toEqual({
+        canAdd: true,
+        canEdit: false,
+        canDelete: false,
+      });
+      permsUserId = user.id;
+    });
+
+    it('restricted user logs in and receives permissions in payload', async () => {
+      const loginRes = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'perms.test@company.internal',
+          password: 'password123',
+        },
+      });
+
+      expect(loginRes.statusCode).toBe(200);
+      const data = JSON.parse(loginRes.payload);
+      permsUserToken = data.token;
+      expect(data.user.permissions).toEqual({
+        canAdd: true,
+        canEdit: false,
+        canDelete: false,
+      });
+    });
+
+    it('restricted user can add a new collection (canAdd = true)', async () => {
+      const addRes = await app.inject({
+        method: 'POST',
+        url: '/api/collections',
+        headers: { authorization: `Bearer ${permsUserToken}` },
+        payload: {
+          id: testColId,
+          name: 'Perms Test Collection',
+          workspaceId: 'ws-default-company',
+          folders: [],
+          requests: [],
+        },
+      });
+
+      expect(addRes.statusCode).toBe(200);
+      const saved = JSON.parse(addRes.payload);
+      expect(saved.id).toBe(testColId);
+    });
+
+    it('restricted user cannot edit the existing collection (canEdit = false)', async () => {
+      const editRes = await app.inject({
+        method: 'POST',
+        url: '/api/collections',
+        headers: { authorization: `Bearer ${permsUserToken}` },
+        payload: {
+          id: testColId,
+          name: 'Renamed By Restricted User',
+          workspaceId: 'ws-default-company',
+          folders: [],
+          requests: [],
+        },
+      });
+
+      expect(editRes.statusCode).toBe(403);
+      const body = JSON.parse(editRes.payload);
+      expect(body.message).toContain('permission to edit collections');
+    });
+
+    it('restricted user cannot delete the collection (canDelete = false)', async () => {
+      const delRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/collections/${testColId}`,
+        headers: { authorization: `Bearer ${permsUserToken}` },
+      });
+
+      expect(delRes.statusCode).toBe(403);
+      const body = JSON.parse(delRes.payload);
+      expect(body.message).toContain('permission to delete collections');
+    });
+
+    it('admin grants canEdit and canDelete permissions to the user', async () => {
+      const updateRes = await app.inject({
+        method: 'PATCH',
+        url: `/api/users/${permsUserId}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          permissions: {
+            canAdd: true,
+            canEdit: true,
+            canDelete: true,
+          },
+        },
+      });
+
+      expect(updateRes.statusCode).toBe(200);
+      const updated = JSON.parse(updateRes.payload);
+      expect(updated.permissions).toEqual({
+        canAdd: true,
+        canEdit: true,
+        canDelete: true,
+      });
+    });
+
+    it('user can now edit and delete the collection after permissions updated', async () => {
+      // Edit collection
+      const editRes = await app.inject({
+        method: 'POST',
+        url: '/api/collections',
+        headers: { authorization: `Bearer ${permsUserToken}` },
+        payload: {
+          id: testColId,
+          name: 'Renamed Perms Collection',
+          workspaceId: 'ws-default-company',
+          folders: [],
+          requests: [],
+        },
+      });
+      expect(editRes.statusCode).toBe(200);
+
+      // Delete collection
+      const delRes = await app.inject({
+        method: 'DELETE',
+        url: `/api/collections/${testColId}`,
+        headers: { authorization: `Bearer ${permsUserToken}` },
+      });
+      expect(delRes.statusCode).toBe(200);
+    });
+
+    it('cleans up permissions test user', async () => {
+      const delUser = await app.inject({
+        method: 'DELETE',
+        url: `/api/users/${permsUserId}`,
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+      expect(delUser.statusCode).toBe(200);
+    });
+  });
 });

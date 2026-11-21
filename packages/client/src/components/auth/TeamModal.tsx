@@ -18,7 +18,8 @@ import {
   Pencil,
   Check,
 } from 'lucide-react';
-import type { User, UserRole } from '@internalapi/shared';
+import type { User, UserRole, UserPermissions } from '@internalapi/shared';
+import { resolveUserPermissions } from '@internalapi/shared';
 
 export const TeamModal: React.FC = () => {
   const {
@@ -39,6 +40,9 @@ export const TeamModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('editor');
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
+  const [canAdd, setCanAdd] = useState(true);
+  const [canEdit, setCanEdit] = useState(true);
+  const [canDelete, setCanDelete] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +62,44 @@ export const TeamModal: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<UserRole>('editor');
   const [editWorkspaceIds, setEditWorkspaceIds] = useState<string[]>([]);
+  const [editCanAdd, setEditCanAdd] = useState(true);
+  const [editCanEdit, setEditCanEdit] = useState(true);
+  const [editCanDelete, setEditCanDelete] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleRoleChange = (newRole: UserRole) => {
+    setRole(newRole);
+    if (newRole === 'admin') {
+      setCanAdd(true);
+      setCanEdit(true);
+      setCanDelete(true);
+    } else if (newRole === 'editor') {
+      setCanAdd(true);
+      setCanEdit(true);
+      setCanDelete(true);
+    } else if (newRole === 'viewer') {
+      setCanAdd(false);
+      setCanEdit(false);
+      setCanDelete(false);
+    }
+  };
+
+  const handleEditRoleChange = (newRole: UserRole) => {
+    setEditRole(newRole);
+    if (newRole === 'admin') {
+      setEditCanAdd(true);
+      setEditCanEdit(true);
+      setEditCanDelete(true);
+    } else if (newRole === 'editor') {
+      setEditCanAdd(true);
+      setEditCanEdit(true);
+      setEditCanDelete(true);
+    } else if (newRole === 'viewer') {
+      setEditCanAdd(false);
+      setEditCanEdit(false);
+      setEditCanDelete(false);
+    }
+  };
 
   useEffect(() => {
     if (isTeamModalOpen && currentUser?.role === 'admin') {
@@ -112,6 +153,7 @@ export const TeamModal: React.FC = () => {
         password,
         role,
         workspaceIds: role === 'admin' ? workspaces.map((w) => w.id) : selectedWorkspaceIds,
+        permissions: role === 'admin' ? { canAdd: true, canEdit: true, canDelete: true } : { canAdd, canEdit, canDelete },
       });
 
       if (res.success) {
@@ -120,6 +162,9 @@ export const TeamModal: React.FC = () => {
         setEmail('');
         setPassword('');
         setSelectedWorkspaceIds(workspaces.length > 0 ? [workspaces[0].id] : []);
+        setCanAdd(true);
+        setCanEdit(true);
+        setCanDelete(true);
         setIsAddFormOpen(false);
       } else {
         setError(res.error || 'Failed to create user account');
@@ -182,6 +227,10 @@ export const TeamModal: React.FC = () => {
     setEditName(user.name);
     setEditRole(user.role);
     setEditWorkspaceIds(user.workspaceIds || (user.role === 'admin' ? workspaces.map((w) => w.id) : [workspaces[0]?.id].filter(Boolean)));
+    const perms = resolveUserPermissions(user);
+    setEditCanAdd(perms.canAdd);
+    setEditCanEdit(perms.canEdit);
+    setEditCanDelete(perms.canDelete);
     setResetUserId(null);
     setError(null);
     setSuccess(null);
@@ -198,6 +247,7 @@ export const TeamModal: React.FC = () => {
       name: editName.trim(),
       role: editRole,
       workspaceIds: editRole === 'admin' ? workspaces.map((w) => w.id) : editWorkspaceIds,
+      permissions: editRole === 'admin' ? { canAdd: true, canEdit: true, canDelete: true } : { canAdd: editCanAdd, canEdit: editCanEdit, canDelete: editCanDelete },
     });
     setIsUpdating(false);
 
@@ -306,7 +356,7 @@ export const TeamModal: React.FC = () => {
                     <select
                       value={editRole}
                       disabled={editingUser.id === currentUser?.id}
-                      onChange={(e) => setEditRole(e.target.value as UserRole)}
+                      onChange={(e) => handleEditRoleChange(e.target.value as UserRole)}
                       className="w-full px-2.5 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded text-gray-200 focus:outline-none focus:border-amber-500 cursor-pointer disabled:opacity-50"
                     >
                       <option value="editor">Editor (Send requests, edit collections in linked workspaces)</option>
@@ -369,6 +419,92 @@ export const TeamModal: React.FC = () => {
                           </label>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Granular Permissions Section in Edit Mode */}
+                <div className="space-y-1.5 pt-2 border-t border-gray-800/80">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-gray-300 flex items-center space-x-1.5">
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Action Permissions</span>
+                    </label>
+                    {editRole !== 'admin' && (
+                      <span className="text-[10px] text-gray-400">
+                        Configure allowed operations
+                      </span>
+                    )}
+                  </div>
+
+                  {editRole === 'admin' ? (
+                    <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
+                      Admin accounts automatically have all permissions: Add, Edit, and Delete across all workspaces.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <label
+                        onClick={() => setEditCanAdd(!editCanAdd)}
+                        className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                          editCanAdd
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200'
+                            : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                            editCanAdd ? 'bg-emerald-500 border-emerald-500 text-gray-950' : 'border-gray-700 bg-gray-950'
+                          }`}
+                        >
+                          {editCanAdd && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="truncate text-xs">
+                          <div className="font-semibold text-gray-200">Add</div>
+                          <div className="text-[10px] text-gray-400">Create items</div>
+                        </div>
+                      </label>
+
+                      <label
+                        onClick={() => setEditCanEdit(!editCanEdit)}
+                        className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                          editCanEdit
+                            ? 'bg-blue-500/10 border-blue-500/40 text-blue-200'
+                            : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                            editCanEdit ? 'bg-blue-500 border-blue-500 text-gray-950' : 'border-gray-700 bg-gray-950'
+                          }`}
+                        >
+                          {editCanEdit && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="truncate text-xs">
+                          <div className="font-semibold text-gray-200">Edit</div>
+                          <div className="text-[10px] text-gray-400">Modify items</div>
+                        </div>
+                      </label>
+
+                      <label
+                        onClick={() => setEditCanDelete(!editCanDelete)}
+                        className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                          editCanDelete
+                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
+                            : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                            editCanDelete ? 'bg-rose-500 border-rose-500 text-gray-950' : 'border-gray-700 bg-gray-950'
+                          }`}
+                        >
+                          {editCanDelete && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                        <div className="truncate text-xs">
+                          <div className="font-semibold text-gray-200">Delete</div>
+                          <div className="text-[10px] text-gray-400">Remove items</div>
+                        </div>
+                      </label>
                     </div>
                   )}
                 </div>
@@ -549,7 +685,7 @@ export const TeamModal: React.FC = () => {
                   <label className="text-[11px] font-medium text-gray-400">Role & Permissions</label>
                   <select
                     value={role}
-                    onChange={(e) => setRole(e.target.value as UserRole)}
+                    onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                     className="w-full px-2.5 py-1.5 text-xs bg-gray-900 border border-gray-800 rounded text-gray-200 focus:outline-none focus:border-orange-500 cursor-pointer"
                   >
                     <option value="editor">Editor (Send requests, edit collections in linked workspace)</option>
@@ -613,6 +749,92 @@ export const TeamModal: React.FC = () => {
                 )}
               </div>
 
+              {/* Action Permissions Section */}
+              <div className="space-y-1.5 pt-2 border-t border-gray-800/80">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-gray-300 flex items-center space-x-1.5">
+                    <Shield className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Action Permissions</span>
+                  </label>
+                  {role !== 'admin' && (
+                    <span className="text-[10px] text-gray-400">
+                      Configure allowed operations
+                    </span>
+                  )}
+                </div>
+
+                {role === 'admin' ? (
+                  <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs">
+                    Admin accounts automatically receive all permissions: Add, Edit, and Delete across all workspaces.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <label
+                      onClick={() => setCanAdd(!canAdd)}
+                      className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                        canAdd
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200'
+                          : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                          canAdd ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-700 bg-gray-950'
+                        }`}
+                      >
+                        {canAdd && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="truncate text-xs">
+                        <div className="font-semibold text-gray-200">Add</div>
+                        <div className="text-[10px] text-gray-400">Create items</div>
+                      </div>
+                    </label>
+
+                    <label
+                      onClick={() => setCanEdit(!canEdit)}
+                      className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                        canEdit
+                          ? 'bg-blue-500/10 border-blue-500/40 text-blue-200'
+                          : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                          canEdit ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-700 bg-gray-950'
+                        }`}
+                      >
+                        {canEdit && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="truncate text-xs">
+                        <div className="font-semibold text-gray-200">Edit</div>
+                        <div className="text-[10px] text-gray-400">Modify items</div>
+                      </div>
+                    </label>
+
+                    <label
+                      onClick={() => setCanDelete(!canDelete)}
+                      className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer border transition-colors ${
+                        canDelete
+                          ? 'bg-rose-500/10 border-rose-500/40 text-rose-200'
+                          : 'bg-gray-900/80 border-gray-800 text-gray-400 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                          canDelete ? 'bg-rose-500 border-rose-500 text-white' : 'border-gray-700 bg-gray-950'
+                        }`}
+                      >
+                        {canDelete && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <div className="truncate text-xs">
+                        <div className="font-semibold text-gray-200">Delete</div>
+                        <div className="text-[10px] text-gray-400">Remove items</div>
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end pt-1">
                 <button
                   type="submit"
@@ -639,6 +861,7 @@ export const TeamModal: React.FC = () => {
                 <tr className="border-b border-gray-800 bg-gray-950/80 text-[11px] font-medium text-gray-400">
                   <th className="py-2.5 px-3">User</th>
                   <th className="py-2.5 px-3">Role</th>
+                  <th className="py-2.5 px-3">Permissions</th>
                   <th className="py-2.5 px-3">Linked Workspaces</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Created</th>
@@ -648,7 +871,7 @@ export const TeamModal: React.FC = () => {
               <tbody className="divide-y divide-gray-800/60">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
                       No users match your search query.
                     </td>
                   </tr>
@@ -703,6 +926,46 @@ export const TeamModal: React.FC = () => {
                             )}
                             <span>{user.role}</span>
                           </span>
+                        </td>
+
+                        <td className="py-2.5 px-3">
+                          {(() => {
+                            const perms = resolveUserPermissions(user);
+                            return (
+                              <div className="flex items-center space-x-1">
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                    perms.canAdd
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : 'bg-gray-800 text-gray-500 border-gray-700/50 line-through opacity-50'
+                                  }`}
+                                  title={perms.canAdd ? 'Can Add (Create)' : 'Cannot Add'}
+                                >
+                                  Add
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                    perms.canEdit
+                                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                      : 'bg-gray-800 text-gray-500 border-gray-700/50 line-through opacity-50'
+                                  }`}
+                                  title={perms.canEdit ? 'Can Edit' : 'Cannot Edit'}
+                                >
+                                  Edit
+                                </span>
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                    perms.canDelete
+                                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                      : 'bg-gray-800 text-gray-500 border-gray-700/50 line-through opacity-50'
+                                  }`}
+                                  title={perms.canDelete ? 'Can Delete' : 'Cannot Delete'}
+                                >
+                                  Delete
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         <td className="py-2.5 px-3">
