@@ -1,5 +1,12 @@
 {
-  "workspaces": [],
+  "workspaces": [
+    {
+      "id": "ws-default-company",
+      "name": "Company Internal APIs",
+      "description": "Default company workspace for internal and microservice testing",
+      "isDefault": true
+    }
+  ],
   "environments": [
     {
       "id": "env-development",
@@ -5937,6 +5944,16 @@
     }
   ],
   "history": [
+    {
+      "workspaceId": "ws-default-company",
+      "method": "GET",
+      "url": "https://preprod-lms-admin.joacademy.com/api/v2/courses/user?status=true&page=1&=JHhhh&status=true&page=1",
+      "status": 200,
+      "size": 10835,
+      "time": 2014,
+      "id": "hist-7146a77e-94cd-4bd6-8b6f-6fcb04e149a2",
+      "createdAt": "2026-11-21T13:30:01.522Z"
+    },
     {
       "workspaceId": "ws-default-company",
       "method": "GET",

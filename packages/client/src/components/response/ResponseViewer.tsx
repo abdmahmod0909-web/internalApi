@@ -329,12 +329,18 @@ export const ResponseViewer: React.FC = () => {
         )}
 
         {activeTab === 'preview' && (
-          <iframe
-            srcDoc={response.body}
-            sandbox="allow-same-origin"
-            title="Response Preview"
-            className="w-full h-full bg-white rounded border border-gray-800 min-h-[300px]"
-          />
+          isJson ? (
+            <pre className="p-4 font-mono text-xs text-gray-800 bg-white rounded overflow-auto whitespace-pre-wrap select-text leading-relaxed min-h-[300px]">
+              {formattedBody}
+            </pre>
+          ) : (
+            <iframe
+              srcDoc={response.body}
+              sandbox="allow-same-origin"
+              title="Response Preview"
+              className="w-full h-full bg-white rounded border border-gray-800 min-h-[300px]"
+            />
+          )
         )}
 
         {activeTab === 'headers' && (

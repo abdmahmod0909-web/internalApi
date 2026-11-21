@@ -19,7 +19,7 @@ import type {
   UserPermissions,
   CollectionVariable,
 } from '@internalapi/shared';
-import { executeScript, interpolateVariables, resolveUserPermissions } from '@internalapi/shared';
+import { executeScript, interpolateVariables, interpolateDeep, resolveUserPermissions } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
 
 export interface TabItem {
@@ -726,6 +726,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const history = Array.isArray(histRes) ? histRes : [];
       const flows = Array.isArray(flowRes) ? flowRes : [];
 
+      const storedEnvId = getStoredItem('internalapi_active_env_id', '');
+      let initialEnvId: string | null = null;
+      if (storedEnvId === '' || storedEnvId === 'none') {
+        initialEnvId = null;
+      } else if (storedEnvId && environments.some((e) => e.id === storedEnvId)) {
+        initialEnvId = storedEnvId;
+      } else if (environments.length > 0) {
+        initialEnvId = environments[0].id;
+      }
+
       set({
         workspaces,
         activeWorkspaceId: activeWs,
@@ -733,7 +743,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         collections,
         history,
         flows,
-        activeEnvironmentId: environments.length > 0 ? environments[0].id : null,
+        activeEnvironmentId: initialEnvId,
       });
 
       setStoredItem('internalapi_collections', JSON.stringify(collections));
@@ -1055,7 +1065,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const envVars: Record<string, string> = {};
     if (activeEnv) {
       for (const v of activeEnv.variables) {
-        if (v.isEnabled && v.key) envVars[v.key] = v.value;
+        if (v.isEnabled !== false && v.key) envVars[v.key] = v.value;
       }
     }
 
@@ -1175,14 +1185,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       effectiveRequest = { ...effectiveRequest, auth: parentCol.auth };
     }
 
+    // Merge all active variable scopes: Collection variables first, then Environment variables override
+    const allVars: Record<string, string> = { ...colVars, ...envVars };
+
+    // Deeply interpolate request fields on client so URL, params, headers, and body are fully resolved
+    const interpolatedRequest: ApiRequestData = interpolateDeep(effectiveRequest, allVars);
+
     try {
       const res = await apiFetch('/api/proxy/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          request: effectiveRequest,
+          request: interpolatedRequest,
           environmentId: activeEnvironmentId,
           workspaceId: activeWorkspaceId,
+          environmentVariables: envVars,
+          collectionVariables: colVars,
         }),
         signal: controller.signal,
       });
@@ -1490,14 +1508,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveEnvironment: async (env) => {
-    const res = await apiFetch('/api/environments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(env),
-    });
-    const saved = await res.json();
+    let saved = env;
+    try {
+      const res = await apiFetch('/api/environments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(env),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.id) saved = data;
+      }
+    } catch (e) {
+      console.warn('Network error saving environment to backend, updating local state:', e);
+    }
+
     const currentEnvs = get().environments;
-    const idx = currentEnvs.findIndex((e) => e.id === saved.id);
+    const idx = currentEnvs.findIndex((e) => e.id === saved.id || e.id === env.id);
     const next = [...currentEnvs];
     if (idx >= 0) next[idx] = saved;
     else next.push(saved);
@@ -2066,7 +2093,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const baseVars: Record<string, string> = {};
     if (activeEnv) {
       for (const v of activeEnv.variables) {
-        if (v.isEnabled && v.key) baseVars[v.key] = v.value;
+        if (v.isEnabled !== false && v.key) baseVars[v.key] = v.value;
       }
     }
 
@@ -2166,6 +2193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               request: reqData,
               environmentId: activeEnvironmentId,
               workspaceId: activeWorkspaceId,
+              environmentVariables: stringVars,
             }),
           });
 

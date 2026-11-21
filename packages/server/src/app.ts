@@ -580,6 +580,8 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
       request: ApiRequestData;
       environmentId?: string;
       workspaceId?: string;
+      environmentVariables?: Record<string, string>;
+      collectionVariables?: Record<string, string>;
     };
 
     if (!body?.request || !body.request.url || !body.request.url.trim()) {
@@ -589,8 +591,13 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
     const wsId = body.workspaceId || 'ws-default-company';
     const collectionId = body.request.collectionId || (body as any).collectionId;
 
-    // 1. Resolve Variables: Environment overrides Collection
-    const resolvedVars = db.getResolvedVariables(body.environmentId, collectionId);
+    // 1. Resolve Variables: Environment overrides Collection, client-passed active env vars take precedence
+    const dbVars = db.getResolvedVariables(body.environmentId, collectionId);
+    const resolvedVars: Record<string, string> = {
+      ...dbVars,
+      ...(body.collectionVariables || {}),
+      ...(body.environmentVariables || {}),
+    };
 
     // 2. Deeply interpolate all template strings in the request
     let effectiveRequest: ApiRequestData = interpolateDeep(body.request, resolvedVars);

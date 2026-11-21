@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import zlib from 'node:zlib';
 import { URL } from 'node:url';
 import { performance } from 'node:perf_hooks';
 import type {
@@ -33,6 +34,79 @@ function parseSetCookie(cookies: string | string[]): CookieItem[] {
     }
     return cookie;
   });
+}
+
+/**
+ * Decompresses and decodes the HTTP response buffer based on Content-Encoding and Content-Type charset.
+ * Prevents garbled/corrupted binary text when upstream servers return gzip, deflate, or brotli compressed data,
+ * and ensures Arabic and non-ASCII characters are cleanly decoded.
+ */
+export function decompressAndDecodeResponseBody(
+  buffer: Buffer,
+  headers: http.IncomingHttpHeaders | Record<string, any>
+): { body: string; decompressedBuffer: Buffer; wasCompressed: boolean } {
+  if (!buffer || buffer.length === 0) {
+    return { body: '', decompressedBuffer: buffer, wasCompressed: false };
+  }
+
+  const contentEncoding = String(headers['content-encoding'] || '').toLowerCase().trim();
+  let decompressed = buffer;
+  let wasCompressed = false;
+
+  // Check gzip by header or magic bytes (0x1f, 0x8b)
+  const isGzip =
+    contentEncoding.includes('gzip') ||
+    (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b);
+  const isBrotli = contentEncoding.includes('br');
+  const isDeflate = contentEncoding.includes('deflate');
+
+  try {
+    if (isGzip) {
+      try {
+        decompressed = zlib.gunzipSync(buffer);
+        wasCompressed = true;
+      } catch {
+        // Fallback to inflate if header claimed gzip but actually zlib wrapped
+        decompressed = zlib.inflateSync(buffer);
+        wasCompressed = true;
+      }
+    } else if (isBrotli) {
+      decompressed = zlib.brotliDecompressSync(buffer);
+      wasCompressed = true;
+    } else if (isDeflate) {
+      try {
+        decompressed = zlib.inflateSync(buffer);
+        wasCompressed = true;
+      } catch {
+        // Fallback for raw deflate stream without zlib header
+        decompressed = zlib.inflateRawSync(buffer);
+        wasCompressed = true;
+      }
+    }
+  } catch {
+    // If decompression fails, retain original buffer
+    decompressed = buffer;
+  }
+
+  // Detect character encoding from Content-Type (e.g. text/html; charset=windows-1256, utf-8)
+  const contentType = String(headers['content-type'] || '');
+  const charsetMatch = contentType.match(/charset=([a-zA-Z0-9_\-]+)/i);
+  const charset = charsetMatch ? charsetMatch[1].toLowerCase().trim() : 'utf-8';
+
+  let body: string;
+  try {
+    const decoder = new TextDecoder(charset);
+    body = decoder.decode(decompressed);
+  } catch {
+    // If TextDecoder fails with specified charset, fallback to utf-8
+    try {
+      body = new TextDecoder('utf-8').decode(decompressed);
+    } catch {
+      body = decompressed.toString('utf8');
+    }
+  }
+
+  return { body, decompressedBuffer: decompressed, wasCompressed };
 }
 
 /**
@@ -282,12 +356,22 @@ export async function executeProxyRequest(
         const endTime = performance.now();
         const totalDuration = Math.round(endTime - startTime);
         const fullBuffer = Buffer.concat(chunks);
+        const { body, decompressedBuffer, wasCompressed } = decompressAndDecodeResponseBody(
+          fullBuffer,
+          res.headers
+        );
 
         const responseHeaders: Record<string, string | string[]> = {};
         for (const [key, val] of Object.entries(res.headers)) {
           if (val !== undefined) {
             responseHeaders[key] = val;
           }
+        }
+
+        // If body was decompressed, update content-encoding and content-length headers
+        if (wasCompressed) {
+          delete responseHeaders['content-encoding'];
+          responseHeaders['content-length'] = String(decompressedBuffer.length);
         }
 
         const cookies = parseSetCookie(res.headers['set-cookie'] || []);
@@ -307,8 +391,8 @@ export async function executeProxyRequest(
           statusText: res.statusMessage || 'OK',
           headers: responseHeaders,
           cookies,
-          body: fullBuffer.toString('utf8'),
-          size: fullBuffer.length,
+          body,
+          size: decompressedBuffer.length,
           time: totalDuration,
           timings,
           contentType,

@@ -42,45 +42,7 @@ export const RequestBuilder: React.FC = () => {
   const [showClientSecret, setShowClientSecret] = useState(false);
   const [isCopiedResolvedUrl, setIsCopiedResolvedUrl] = useState(false);
 
-  if (!currentTab) {
-    return <div className="p-8 text-center text-gray-500">No active request tab.</div>;
-  }
-
-  const req = currentTab.request;
-
-  // Handle cURL import
-  const applyCurlImport = (curlText: string) => {
-    try {
-      const parsed = parseCurlCommand(curlText);
-      updateActiveRequest((prev) => ({
-        ...prev,
-        ...parsed,
-        id: prev.id,
-        collectionId: prev.collectionId,
-        folderId: prev.folderId,
-      }));
-      setCurlImportNotice(`cURL imported: ${parsed.method} with ${parsed.headers?.length || 0} headers`);
-      setTimeout(() => setCurlImportNotice(null), 4000);
-    } catch (e: any) {
-      console.error('Failed to parse cURL:', e);
-    }
-  };
-
-  const handleUrlPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const pasted = e.clipboardData.getData('text');
-    if (isCurlCommand(pasted)) {
-      e.preventDefault();
-      applyCurlImport(pasted);
-    }
-  };
-
-  const handleUrlChange = (value: string) => {
-    if (isCurlCommand(value)) {
-      applyCurlImport(value);
-      return;
-    }
-    updateActiveRequest((prev) => ({ ...prev, url: value }));
-  };
+  const req = currentTab?.request;
 
   // Close URL suggestions on outside click
   useEffect(() => {
@@ -101,7 +63,7 @@ export const RequestBuilder: React.FC = () => {
     const currentEnv = environments.find((e) => e.id === activeEnvironmentId);
     if (currentEnv) {
       for (const v of currentEnv.variables) {
-        if (v.isEnabled && v.key) {
+        if (v.isEnabled !== false && v.key) {
           list.push({ key: v.key, value: v.value, scope: `Env (${currentEnv.name})` });
         }
       }
@@ -109,7 +71,7 @@ export const RequestBuilder: React.FC = () => {
 
     // 2. Collection variables
     const parentCol = collections.find(
-      (c) => c.requests?.some((r) => r.id === req.id) || c.id === req.collectionId
+      (c) => c.requests?.some((r) => r.id === req?.id) || c.id === req?.collectionId
     );
     if (parentCol) {
       if (Array.isArray(parentCol.collectionVariables)) {
@@ -134,7 +96,7 @@ export const RequestBuilder: React.FC = () => {
 
   // Compute resolved URL preview info when URL has {{...}}
   const resolvedUrlInfo = useMemo(() => {
-    if (!req.url || !req.url.includes('{{')) return null;
+    if (!req?.url || !req.url.includes('{{')) return null;
 
     const matches = req.url.match(/\{\{([a-zA-Z0-9_.\-]+)\}\}/g);
     if (!matches || matches.length === 0) return null;
@@ -175,7 +137,7 @@ export const RequestBuilder: React.FC = () => {
       url: interpolated,
       variables: detectedVars,
     };
-  }, [req.url, allAvailableVariables]);
+  }, [req?.url, allAvailableVariables]);
 
   // Compute suggestions (History, Collections, Environment variables, Starter presets)
   const urlSuggestions = useMemo(() => {
@@ -261,14 +223,48 @@ export const RequestBuilder: React.FC = () => {
     }
 
     return list.slice(0, 8);
-  }, [req?.url, history, collections, environments, activeEnvironmentId]);
+  }, [req?.url, history, collections, allAvailableVariables]);
+
+  // Handle cURL import
+  const applyCurlImport = (curlText: string) => {
+    try {
+      const parsed = parseCurlCommand(curlText);
+      updateActiveRequest((prev) => ({
+        ...prev,
+        ...parsed,
+        id: prev.id,
+        collectionId: prev.collectionId,
+        folderId: prev.folderId,
+      }));
+      setCurlImportNotice(`cURL imported: ${parsed.method} with ${parsed.headers?.length || 0} headers`);
+      setTimeout(() => setCurlImportNotice(null), 4000);
+    } catch (e: any) {
+      console.error('Failed to parse cURL:', e);
+    }
+  };
+
+  const handleUrlPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (isCurlCommand(pasted)) {
+      e.preventDefault();
+      applyCurlImport(pasted);
+    }
+  };
+
+  const handleUrlChange = (value: string) => {
+    if (isCurlCommand(value)) {
+      applyCurlImport(value);
+      return;
+    }
+    updateActiveRequest((prev) => ({ ...prev, url: value }));
+  };
 
   const selectSuggestion = (s: { text: string; method?: string; type: string }) => {
     if (s.type === 'env') {
-      if (req.url?.includes('{{')) {
+      if (req?.url?.includes('{{')) {
         const updated = req.url.replace(/\{\{[^}]*$/, s.text);
         handleUrlChange(updated);
-      } else if (!req.url || req.url.trim() === '') {
+      } else if (!req?.url || req.url.trim() === '') {
         handleUrlChange(s.text);
       } else {
         handleUrlChange(req.url + s.text);
@@ -282,6 +278,10 @@ export const RequestBuilder: React.FC = () => {
     setIsUrlSuggestionsOpen(false);
     setSelectedSuggestionIndex(-1);
   };
+
+  if (!currentTab || !req) {
+    return <div className="p-8 text-center text-gray-500">No active request tab.</div>;
+  }
 
   // Auto-sync query params into URL string
   const handleQueryParamsChange = (items: any[]) => {
@@ -405,28 +405,28 @@ export const RequestBuilder: React.FC = () => {
       <div className="p-3 border-b border-gray-800 flex flex-col gap-2 relative" ref={urlContainerRef}>
         <div className="flex items-center space-x-2">
           <div className="flex flex-1 min-w-0 rounded-lg bg-gray-900 border border-gray-700 focus-within:border-orange-500 transition-colors overflow-visible relative p-1 items-center">
-            {/* White Method Selector Badge - Rounded like the rest of the body */}
+            {/* Postman-Style Method Selector Badge */}
             <select
               value={req.method}
               onChange={(e) =>
                 updateActiveRequest((prev) => ({ ...prev, method: e.target.value as HttpMethod }))
               }
-              className={`bg-white hover:bg-gray-100 border border-gray-200/90 font-bold text-xs px-3 py-1.5 rounded-lg outline-none cursor-pointer shrink-0 shadow-xs transition-colors my-0.5 ml-0.5 ${
+              className={`bg-gray-800/90 hover:bg-gray-750 border border-gray-700 font-bold text-xs px-2.5 py-1.5 rounded-md outline-none cursor-pointer shrink-0 transition-colors my-0.5 ml-0.5 ${
                 req.method === 'GET'
-                  ? 'text-emerald-600'
+                  ? 'text-emerald-400'
                   : req.method === 'POST'
-                  ? 'text-orange-600'
+                  ? 'text-amber-400'
                   : req.method === 'PUT'
-                  ? 'text-blue-600'
+                  ? 'text-blue-400'
                   : req.method === 'DELETE'
-                  ? 'text-rose-600'
+                  ? 'text-rose-400'
                   : req.method === 'PATCH'
-                  ? 'text-purple-600'
-                  : 'text-gray-800'
+                  ? 'text-purple-400'
+                  : 'text-gray-300'
               }`}
             >
               {HTTP_METHODS.map((m) => (
-                <option key={m} value={m} className="bg-white text-gray-900 font-bold">
+                <option key={m} value={m} className="bg-gray-900 text-gray-200 font-bold">
                   {m}
                 </option>
               ))}
