@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '../store/useAppStore.js';
 import {
   Plus,
@@ -57,6 +58,8 @@ export const TabBar: React.FC = () => {
 
   const tabsContainerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -93,7 +96,12 @@ export const TabBar: React.FC = () => {
   // Close dropdown & context menu on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        !(menuRef.current && menuRef.current.contains(target))
+      ) {
         setIsDropdownOpen(false);
       }
       setContextMenu(null);
@@ -354,7 +362,15 @@ export const TabBar: React.FC = () => {
           {/* More Tabs Dropdown (v) with Full Tab Actions */}
           <div className="relative" ref={dropdownRef}>
             <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const menuWidth = 288;
+                setDropdownPos({
+                  top: rect.bottom + 4,
+                  left: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)),
+                });
+                setIsDropdownOpen(!isDropdownOpen);
+              }}
               className={`p-1.5 rounded transition-colors ${
                 isDropdownOpen
                   ? 'bg-gray-800 text-orange-400'
@@ -365,8 +381,12 @@ export const TabBar: React.FC = () => {
               <ChevronDown className="w-3.5 h-3.5 text-orange-400" />
             </button>
 
-            {isDropdownOpen && (
-              <div className="absolute left-0 mt-1 w-72 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl py-1.5 z-50 text-xs text-gray-200">
+            {isDropdownOpen && createPortal(
+              <div
+                ref={menuRef}
+                style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                className="fixed w-72 bg-gray-900 border border-gray-800 rounded-lg shadow-2xl py-1.5 z-[100] text-xs text-gray-200"
+              >
                 {/* Header & Quick Action Buttons */}
                 <div className="px-3 py-1.5 border-b border-gray-800 flex items-center justify-between text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                   <span>Tab Actions</span>
@@ -519,7 +539,8 @@ export const TabBar: React.FC = () => {
                     );
                   })}
                 </div>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>

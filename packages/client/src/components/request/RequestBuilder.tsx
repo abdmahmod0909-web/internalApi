@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '../../store/useAppStore.js';
 import { KeyValueEditor } from './KeyValueEditor.js';
 import { FormDataEditor } from './FormDataEditor.js';
@@ -580,9 +581,17 @@ export const RequestBuilder: React.FC = () => {
           </div>
         )}
 
-        {/* URL Auto-Suggestions Dropdown (Postman-style) */}
-        {isUrlSuggestionsOpen && urlSuggestions.length > 0 && (
-          <div className="absolute top-[52px] left-3 right-[92px] mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden divide-y divide-gray-800 max-h-72 overflow-y-auto animate-fadeIn">
+        {/* URL Auto-Suggestions Dropdown (Postman-style) - Rendered as Portal */}
+        {isUrlSuggestionsOpen && urlSuggestions.length > 0 && urlContainerRef.current && createPortal(
+          <div
+            className="fixed bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 overflow-hidden divide-y divide-gray-800 max-h-72 overflow-y-auto animate-fadeIn"
+            style={{
+              top: `${(urlContainerRef.current?.getBoundingClientRect().bottom || 0) + 8}px`,
+              left: `${(urlContainerRef.current?.getBoundingClientRect().left || 0) + 12}px`,
+              right: `${(window.innerWidth - (urlContainerRef.current?.getBoundingClientRect().right || 0)) + 12}px`,
+              maxWidth: `${(urlContainerRef.current?.getBoundingClientRect().width || 0) - 112}px`,
+            }}
+          >
             <div className="px-3 py-1.5 bg-gray-950 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-gray-400 select-none">
               <span>Suggestions, History & Environment Variables</span>
               <span className="text-gray-500 font-mono">Use ↑ ↓ and Enter</span>
@@ -636,7 +645,8 @@ export const RequestBuilder: React.FC = () => {
                 </div>
               );
             })}
-          </div>
+          </div>,
+          document.body
         )}
 
         {/* Send / Cancel Button */}
