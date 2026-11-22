@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import zlib from 'node:zlib';
@@ -19,11 +20,46 @@ const MAX_REDIRECTS = 10;
  * localhost/loopback are redirected to that host. This lets a backend running in
  * Docker/WSL/VM reach APIs running on the developer's machine.
  */
-function applyLocalhostRewrite(url: URL): void {
-  const rewriteHost = process.env.LOCALHOST_REWRITE;
+function applyLocalhostRewrite(url: URL, overrideHost?: string): void {
+  const rewriteHost = overrideHost || process.env.LOCALHOST_REWRITE;
   if (rewriteHost && LOCAL_HOSTNAMES.has(url.hostname)) {
     url.hostname = rewriteHost;
   }
+}
+
+/**
+ * Candidate addresses that usually reach the machine hosting the backend's
+ * container/VM. Tried in order when a loopback target refuses the connection.
+ */
+function getHostFallbackCandidates(): string[] {
+  const candidates: string[] = ['host.docker.internal', 'gateway.docker.internal'];
+
+  // WSL2: Windows host IP is the nameserver in /etc/resolv.conf
+  try {
+    const resolv = fs.readFileSync('/etc/resolv.conf', 'utf8');
+    const m = resolv.match(/^nameserver\s+(\d+\.\d+\.\d+\.\d+)/m);
+    if (m) candidates.push(m[1]);
+  } catch {
+    /* not on Linux / unreadable */
+  }
+
+  // Linux container: default gateway from /proc/net/route (hex, little-endian)
+  try {
+    const route = fs.readFileSync('/proc/net/route', 'utf8').split('\n').slice(1);
+    for (const line of route) {
+      const cols = line.trim().split(/\s+/);
+      if (cols[1] === '00000000' && cols[2]) {
+        const hex = cols[2];
+        const ip = [6, 4, 2, 0].map((i) => parseInt(hex.substring(i, i + 2), 16)).join('.');
+        candidates.push(ip);
+        break;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return [...new Set(candidates)];
 }
 
 /**
@@ -338,11 +374,12 @@ export async function executeProxyRequest(
     method: string,
     payload: Buffer | undefined,
     headers: Record<string, string>,
-    redirectsLeft: number
+    redirectsLeft: number,
+    rewriteHost?: string
   ): Promise<ApiResponseData> => {
     return new Promise<ApiResponseData>((resolve, reject) => {
       const url = new URL(hopUrlStr);
-      applyLocalhostRewrite(url);
+      applyLocalhostRewrite(url, rewriteHost);
 
       const isHttps = url.protocol === 'https:';
       const protocolModule = isHttps ? https : http;
@@ -425,7 +462,7 @@ export async function executeProxyRequest(
           // Validate every redirect target against SSRF rules
           validateSsrfTarget(nextUrl.toString())
             .then(() =>
-              performHop(nextUrl.toString(), nextMethod, nextPayload, nextHeaders, redirectsLeft - 1)
+              performHop(nextUrl.toString(), nextMethod, nextPayload, nextHeaders, redirectsLeft - 1, rewriteHost)
             )
             .then(resolve, reject);
           return;
@@ -534,5 +571,31 @@ export async function executeProxyRequest(
     });
   };
 
-  return performHop(targetUrl, requestData.method, requestPayload, requestHeaders, MAX_REDIRECTS);
+  const targetIsLocal = LOCAL_HOSTNAMES.has(new URL(targetUrl).hostname);
+
+  try {
+    return await performHop(targetUrl, requestData.method, requestPayload, requestHeaders, MAX_REDIRECTS);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    const canFallback =
+      targetIsLocal && !process.env.LOCALHOST_REWRITE && (code === 'ECONNREFUSED' || code === 'EHOSTUNREACH');
+    if (!canFallback) throw err;
+
+    // Loopback refused: the target is probably on the machine hosting this container/VM.
+    for (const host of getHostFallbackCandidates()) {
+      try {
+        return await performHop(
+          targetUrl,
+          requestData.method,
+          requestPayload,
+          requestHeaders,
+          MAX_REDIRECTS,
+          host
+        );
+      } catch {
+        // try next candidate
+      }
+    }
+    throw err; // keep the original, more helpful error
+  }
 }
