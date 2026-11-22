@@ -11,6 +11,21 @@ import type {
 } from '@internalapi/shared';
 import { validateSsrfTarget } from './ssrf.js';
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const MAX_REDIRECTS = 10;
+
+/**
+ * If LOCALHOST_REWRITE is set (e.g. "host.docker.internal"), requests aimed at
+ * localhost/loopback are redirected to that host. This lets a backend running in
+ * Docker/WSL/VM reach APIs running on the developer's machine.
+ */
+function applyLocalhostRewrite(url: URL): void {
+  const rewriteHost = process.env.LOCALHOST_REWRITE;
+  if (rewriteHost && LOCAL_HOSTNAMES.has(url.hostname)) {
+    url.hostname = rewriteHost;
+  }
+}
+
 /**
  * Parses Set-Cookie header strings into structured Cookie objects.
  */
@@ -162,11 +177,8 @@ export async function executeProxyRequest(
 ): Promise<ApiResponseData> {
   const targetUrl = buildTargetUrl(requestData);
 
-  // SSRF Protection check
+  // SSRF Protection check (runs on the URL the user entered)
   await validateSsrfTarget(targetUrl);
-
-  const url = new URL(targetUrl);
-  const isHttps = url.protocol === 'https:';
 
   // Request settings
   const timeoutMs = requestData.settings?.timeoutMs || 30000;
@@ -314,128 +326,213 @@ export async function executeProxyRequest(
       break;
   }
 
-  if (requestPayload) {
-    requestHeaders['Content-Length'] = String(requestPayload.length);
-  }
-
-  // Performance timings tracking
+  // Overall timer (spans all redirect hops)
   const startTime = performance.now();
-  let dnsTime = 0;
-  let tcpTime = 0;
-  let tlsTime = 0;
-  let ttfbTime = 0;
 
-  return new Promise<ApiResponseData>((resolve, reject) => {
-    const protocolModule = isHttps ? https : http;
+  /**
+   * Performs a single HTTP hop. Resolves with the final response, following
+   * redirects (with SSRF re-validation on every hop) when enabled.
+   */
+  const performHop = (
+    hopUrlStr: string,
+    method: string,
+    payload: Buffer | undefined,
+    headers: Record<string, string>,
+    redirectsLeft: number
+  ): Promise<ApiResponseData> => {
+    return new Promise<ApiResponseData>((resolve, reject) => {
+      const url = new URL(hopUrlStr);
+      applyLocalhostRewrite(url);
 
-    const reqOptions: https.RequestOptions = {
-      protocol: url.protocol,
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: `${url.pathname}${url.search}`,
-      method: requestData.method,
-      headers: requestHeaders,
-      timeout: timeoutMs,
-      rejectUnauthorized: verifySsl,
-      ca: customCa,
-    };
+      const isHttps = url.protocol === 'https:';
+      const protocolModule = isHttps ? https : http;
 
-    let dnsLookupStart: number;
-    let tcpConnectStart: number;
-    let tlsHandshakeStart: number;
+      const hopHeaders: Record<string, string> = { ...headers };
+      if (payload) {
+        hopHeaders['Content-Length'] = String(payload.length);
+      } else {
+        delete hopHeaders['Content-Length'];
+      }
 
-    const req = protocolModule.request(reqOptions, (res) => {
-      ttfbTime = performance.now() - startTime;
-      const chunks: Buffer[] = [];
+      // Per-hop timing state
+      let dnsTime = 0;
+      let tcpTime = 0;
+      let tlsTime = 0;
+      let ttfbTime = 0;
+      let dnsLookupStart = 0;
+      let tcpConnectStart = 0;
+      let tlsHandshakeStart = 0;
 
-      res.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
+      const reqOptions: https.RequestOptions = {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method,
+        headers: hopHeaders,
+        timeout: timeoutMs,
+        rejectUnauthorized: verifySsl,
+        ca: customCa,
+      };
 
-      res.on('end', () => {
-        const endTime = performance.now();
-        const totalDuration = Math.round(endTime - startTime);
-        const fullBuffer = Buffer.concat(chunks);
-        const { body, decompressedBuffer, wasCompressed } = decompressAndDecodeResponseBody(
-          fullBuffer,
-          res.headers
-        );
+      const req = protocolModule.request(reqOptions, (res) => {
+        ttfbTime = performance.now() - startTime;
 
-        const responseHeaders: Record<string, string | string[]> = {};
-        for (const [key, val] of Object.entries(res.headers)) {
-          if (val !== undefined) {
-            responseHeaders[key] = val;
+        // ---- Redirect handling ----
+        const status = res.statusCode || 0;
+        const location = res.headers.location;
+        if (followRedirects && location && [301, 302, 303, 307, 308].includes(status)) {
+          res.resume(); // discard body
+
+          if (redirectsLeft <= 0) {
+            reject(new Error(`Maximum redirects (${MAX_REDIRECTS}) exceeded`));
+            return;
           }
+
+          let nextUrl: URL;
+          try {
+            // Use the original (non-rewritten) URL as base for relative redirects
+            nextUrl = new URL(location, hopUrlStr);
+          } catch {
+            reject(new Error(`Invalid redirect location: ${location}`));
+            return;
+          }
+
+          let nextMethod = method;
+          let nextPayload = payload;
+          const nextHeaders = { ...hopHeaders };
+
+          // 303 always -> GET; 301/302 -> GET for non-GET/HEAD (browser/curl behaviour)
+          if (
+            status === 303 ||
+            ((status === 301 || status === 302) && method !== 'GET' && method !== 'HEAD')
+          ) {
+            if (method !== 'HEAD') nextMethod = 'GET';
+            nextPayload = undefined;
+            for (const k of Object.keys(nextHeaders)) {
+              const lk = k.toLowerCase();
+              if (lk === 'content-type' || lk === 'content-length') delete nextHeaders[k];
+            }
+          }
+
+          // Never leak credentials to a different host
+          if (nextUrl.host !== new URL(hopUrlStr).host) {
+            for (const k of Object.keys(nextHeaders)) {
+              if (k.toLowerCase() === 'authorization') delete nextHeaders[k];
+            }
+          }
+
+          // Validate every redirect target against SSRF rules
+          validateSsrfTarget(nextUrl.toString())
+            .then(() =>
+              performHop(nextUrl.toString(), nextMethod, nextPayload, nextHeaders, redirectsLeft - 1)
+            )
+            .then(resolve, reject);
+          return;
         }
 
-        // If body was decompressed, update content-encoding and content-length headers
-        if (wasCompressed) {
-          delete responseHeaders['content-encoding'];
-          responseHeaders['content-length'] = String(decompressedBuffer.length);
-        }
+        // ---- Final response ----
+        const chunks: Buffer[] = [];
 
-        const cookies = parseSetCookie(res.headers['set-cookie'] || []);
-        const contentType = String(res.headers['content-type'] || '');
+        res.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
 
-        const timings: TimingBreakdown = {
-          dns: Math.round(dnsTime),
-          tcp: Math.round(tcpTime),
-          tls: Math.round(tlsTime),
-          ttfb: Math.round(ttfbTime),
-          download: Math.round(totalDuration - ttfbTime),
-          total: totalDuration,
-        };
+        res.on('error', reject);
 
-        resolve({
-          status: res.statusCode || 200,
-          statusText: res.statusMessage || 'OK',
-          headers: responseHeaders,
-          cookies,
-          body,
-          size: decompressedBuffer.length,
-          time: totalDuration,
-          timings,
-          contentType,
+        res.on('end', () => {
+          const endTime = performance.now();
+          const totalDuration = Math.round(endTime - startTime);
+          const fullBuffer = Buffer.concat(chunks);
+          const { body, decompressedBuffer, wasCompressed } = decompressAndDecodeResponseBody(
+            fullBuffer,
+            res.headers
+          );
+
+          const responseHeaders: Record<string, string | string[]> = {};
+          for (const [key, val] of Object.entries(res.headers)) {
+            if (val !== undefined) {
+              responseHeaders[key] = val;
+            }
+          }
+
+          // If body was decompressed, update content-encoding and content-length headers
+          if (wasCompressed) {
+            delete responseHeaders['content-encoding'];
+            responseHeaders['content-length'] = String(decompressedBuffer.length);
+          }
+
+          const cookies = parseSetCookie(res.headers['set-cookie'] || []);
+          const contentType = String(res.headers['content-type'] || '');
+
+          const timings: TimingBreakdown = {
+            dns: Math.round(dnsTime),
+            tcp: Math.round(tcpTime),
+            tls: Math.round(tlsTime),
+            ttfb: Math.round(ttfbTime),
+            download: Math.round(totalDuration - ttfbTime),
+            total: totalDuration,
+          };
+
+          resolve({
+            status: res.statusCode || 200,
+            statusText: res.statusMessage || 'OK',
+            headers: responseHeaders,
+            cookies,
+            body,
+            size: decompressedBuffer.length,
+            time: totalDuration,
+            timings,
+            contentType,
+          });
         });
       });
-    });
 
-    // Capture low-level socket timings
-    req.on('socket', (socket) => {
-      dnsLookupStart = performance.now();
+      // Capture low-level socket timings
+      req.on('socket', (socket) => {
+        dnsLookupStart = performance.now();
 
-      socket.on('lookup', () => {
-        dnsTime = performance.now() - dnsLookupStart;
-        tcpConnectStart = performance.now();
+        socket.on('lookup', () => {
+          dnsTime = performance.now() - dnsLookupStart;
+          tcpConnectStart = performance.now();
+        });
+
+        socket.on('connect', () => {
+          if (tcpConnectStart) {
+            tcpTime = performance.now() - tcpConnectStart;
+          }
+          tlsHandshakeStart = performance.now();
+        });
+
+        socket.on('secureConnect', () => {
+          if (tlsHandshakeStart) {
+            tlsTime = performance.now() - tlsHandshakeStart;
+          }
+        });
       });
 
-      socket.on('connect', () => {
-        if (tcpConnectStart) {
-          tcpTime = performance.now() - tcpConnectStart;
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error(`Request timed out after ${timeoutMs}ms`));
+      });
+
+      req.on('error', (err: NodeJS.ErrnoException) => {
+        // Give a more helpful hint for the common "local API unreachable" case
+        if (err.code === 'ECONNREFUSED' && LOCAL_HOSTNAMES.has(new URL(hopUrlStr).hostname)) {
+          err.message +=
+            ' (the proxy backend could not reach this address from its own environment. ' +
+            'If the backend runs in Docker/WSL/a VM, set LOCALHOST_REWRITE=host.docker.internal ' +
+            'or use a host-reachable IP.)';
         }
-        tlsHandshakeStart = performance.now();
+        reject(err);
       });
 
-      socket.on('secureConnect', () => {
-        if (tlsHandshakeStart) {
-          tlsTime = performance.now() - tlsHandshakeStart;
-        }
-      });
+      if (payload) {
+        req.write(payload);
+      }
+      req.end();
     });
+  };
 
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error(`Request timed out after ${timeoutMs}ms`));
-    });
-
-    req.on('error', (err) => {
-      reject(err);
-    });
-
-    if (requestPayload) {
-      req.write(requestPayload);
-    }
-    req.end();
-  });
+  return performHop(targetUrl, requestData.method, requestPayload, requestHeaders, MAX_REDIRECTS);
 }
-
