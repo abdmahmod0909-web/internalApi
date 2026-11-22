@@ -1065,7 +1065,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const envVars: Record<string, string> = {};
     if (activeEnv) {
       for (const v of activeEnv.variables) {
-        if (v.isEnabled !== false && v.key) envVars[v.key] = v.value;
+        if (v.isEnabled !== false && v.key) envVars[v.key] = v.value ?? '';
       }
     }
 
@@ -1075,7 +1075,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (parentCol) {
       if (Array.isArray(parentCol.collectionVariables)) {
         for (const cv of parentCol.collectionVariables) {
-          if (cv.isEnabled !== false && cv.key) colVars[cv.key] = cv.value;
+          if (cv.isEnabled !== false && cv.key) {
+            colVars[cv.key] =
+              cv.currentValue !== undefined && cv.currentValue !== ''
+                ? cv.currentValue
+                : (cv.value ?? '');
+          }
         }
       } else if (parentCol.variables) {
         for (const [k, v] of Object.entries(parentCol.variables)) {
@@ -1083,6 +1088,61 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
     }
+
+    const applyEnvMutations = (mutations?: Record<string, unknown>) => {
+      if (!mutations || Object.keys(mutations).length === 0) return;
+      for (const [k, val] of Object.entries(mutations)) {
+        envVars[k] = String(val);
+      }
+      const latestEnv = get().environments.find((e) => e.id === activeEnvironmentId);
+      if (!latestEnv) return;
+      const updatedVars = [...latestEnv.variables];
+      for (const [k, val] of Object.entries(mutations)) {
+        const strVal = String(val);
+        const idx = updatedVars.findIndex((v) => v.key === k);
+        if (idx >= 0) {
+          updatedVars[idx] = { ...updatedVars[idx], value: strVal };
+        } else {
+          updatedVars.push({
+            id: `v-${Date.now()}-${k}`,
+            key: k,
+            value: strVal,
+            isSecret: false,
+            isEnabled: true,
+          });
+        }
+      }
+      saveEnvironment({ ...latestEnv, variables: updatedVars });
+    };
+
+    const applyColMutations = (mutations?: Record<string, unknown>) => {
+      if (!mutations || Object.keys(mutations).length === 0) return;
+      for (const [k, val] of Object.entries(mutations)) {
+        colVars[k] = String(val);
+      }
+      if (!parentCol) return;
+      const latestCol = get().collections.find((c) => c.id === parentCol.id) || parentCol;
+      const currentVars: CollectionVariable[] = Array.isArray(latestCol.collectionVariables)
+        ? [...latestCol.collectionVariables]
+        : [];
+      for (const [k, val] of Object.entries(mutations)) {
+        const strVal = String(val);
+        const idx = currentVars.findIndex((v) => v.key === k);
+        if (idx >= 0) {
+          currentVars[idx] = { ...currentVars[idx], currentValue: strVal };
+        } else {
+          currentVars.push({
+            id: `v-${Date.now()}-${k}`,
+            key: k,
+            value: strVal,
+            currentValue: strVal,
+            isSecret: false,
+            isEnabled: true,
+          });
+        }
+      }
+      saveCollectionSettings({ ...latestCol, collectionVariables: currentVars });
+    };
 
     const requestHeaders = (tab.request.headers || []).reduce((acc, h) => {
       if (h.isEnabled && h.key) acc[h.key] = h.value;
@@ -1092,9 +1152,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 1a. Run Collection Pre-request Script first if defined
     if (parentCol?.preScript) {
       const colPreResult = executeScript(parentCol.preScript, {
-        environment: envVars,
+        environment: { ...envVars },
         variables: {},
-        collectionVariables: colVars,
+        collectionVariables: { ...colVars },
         request: {
           url: tab.request.url,
           method: tab.request.method,
@@ -1102,43 +1162,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           body: tab.request.bodyContent,
         },
       });
-
-      if (activeEnv && Object.keys(colPreResult.environmentMutations).length > 0) {
-        const updatedVars = [...activeEnv.variables];
-        for (const [k, val] of Object.entries(colPreResult.environmentMutations)) {
-          const strVal = String(val);
-          const idx = updatedVars.findIndex((v) => v.key === k);
-          if (idx >= 0) {
-            updatedVars[idx] = { ...updatedVars[idx], value: strVal };
-          } else {
-            updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
-          }
-        }
-        saveEnvironment({ ...activeEnv, variables: updatedVars });
-      }
-
-      if (Object.keys(colPreResult.collectionMutations).length > 0) {
-        const currentVars: CollectionVariable[] = Array.isArray(parentCol.collectionVariables) ? [...parentCol.collectionVariables] : [];
-        for (const [k, val] of Object.entries(colPreResult.collectionMutations)) {
-          const strVal = String(val);
-          colVars[k] = strVal;
-          const idx = currentVars.findIndex((v) => v.key === k);
-          if (idx >= 0) {
-            currentVars[idx] = { ...currentVars[idx], currentValue: strVal };
-          } else {
-            currentVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, currentValue: strVal, isSecret: false, isEnabled: true });
-          }
-        }
-        saveCollectionSettings({ ...parentCol, collectionVariables: currentVars });
-      }
+      applyEnvMutations(colPreResult.environmentMutations);
+      applyColMutations(colPreResult.collectionMutations);
     }
 
     // 1b. Run Request Pre-request Script if defined
     if (tab.request.preScript) {
       const preResult = executeScript(tab.request.preScript, {
-        environment: envVars,
+        environment: { ...envVars },
         variables: {},
-        collectionVariables: colVars,
+        collectionVariables: { ...colVars },
         request: {
           url: tab.request.url,
           method: tab.request.method,
@@ -1146,37 +1179,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           body: tab.request.bodyContent,
         },
       });
-
-      // Apply environment updates from pre-request script
-      if (activeEnv && Object.keys(preResult.environmentMutations).length > 0) {
-        const updatedVars = [...activeEnv.variables];
-        for (const [k, val] of Object.entries(preResult.environmentMutations)) {
-          const strVal = String(val);
-          const idx = updatedVars.findIndex((v) => v.key === k);
-          if (idx >= 0) {
-            updatedVars[idx] = { ...updatedVars[idx], value: strVal };
-          } else {
-            updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
-          }
-        }
-        saveEnvironment({ ...activeEnv, variables: updatedVars });
-      }
-
-      // Apply collection variables updates
-      if (parentCol && Object.keys(preResult.collectionMutations).length > 0) {
-        const currentVars: CollectionVariable[] = Array.isArray(parentCol.collectionVariables) ? [...parentCol.collectionVariables] : [];
-        for (const [k, val] of Object.entries(preResult.collectionMutations)) {
-          const strVal = String(val);
-          colVars[k] = strVal;
-          const idx = currentVars.findIndex((v) => v.key === k);
-          if (idx >= 0) {
-            currentVars[idx] = { ...currentVars[idx], currentValue: strVal };
-          } else {
-            currentVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, currentValue: strVal, isSecret: false, isEnabled: true });
-          }
-        }
-        saveCollectionSettings({ ...parentCol, collectionVariables: currentVars });
-      }
+      applyEnvMutations(preResult.environmentMutations);
+      applyColMutations(preResult.collectionMutations);
     }
 
     // 1c. Resolve inherited auth if requested
@@ -1201,7 +1205,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       (interpolatedRequest.url || '').trim()
     );
 
-    const buildDirectResponse = async (): Promise<ApiResponseData> => {
+   const buildDirectResponse = async (): Promise<ApiResponseData> => {
       const url = interpolatedRequest.url.trim();
       const method = (interpolatedRequest.method || 'GET').toUpperCase();
 
@@ -1211,40 +1215,52 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (h.isEnabled && h.key) headers[h.key] = h.value ?? '';
       }
 
-      // Apply auth
+      // Apply auth (supports both flat and nested AuthConfig shapes)
       if (interpolatedRequest.auth) {
-        const auth = interpolatedRequest.auth;
-        if (auth.type === 'bearer' && auth.token) {
-          headers['Authorization'] = `Bearer ${auth.token}`;
-        } else if (auth.type === 'basic' && auth.username) {
-          headers['Authorization'] = `Basic ${btoa(`${auth.username}:${auth.password || ''}`)}`;
-        } else if (auth.type === 'apikey' && auth.key && auth.value) {
-          if (!auth.addTo || auth.addTo === 'header') headers[auth.key] = auth.value;
+        const auth = interpolatedRequest.auth as any;
+        if (auth.type === 'bearer') {
+          const token = auth.bearer?.token ?? auth.token;
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+        } else if (auth.type === 'basic') {
+          const username = auth.basic?.username ?? auth.username;
+          const password = auth.basic?.password ?? auth.password ?? '';
+          if (username) headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`;
+        } else if (auth.type === 'apikey') {
+          const apiKey = auth.apiKey ?? auth.apikey ?? auth;
+          const k = apiKey?.key;
+          const v = apiKey?.value;
+          const addTo = apiKey?.addTo ?? apiKey?.in;
+          if (k && v && (!addTo || addTo === 'header')) {
+            headers[k] = v;
+          }
         }
       }
 
       // Build body
       let body: BodyInit | undefined;
       const bodyType = interpolatedRequest.bodyType || 'none';
+      const reqAny = interpolatedRequest as any;
       if (method !== 'GET' && method !== 'HEAD' && bodyType !== 'none') {
         if (bodyType === 'json') {
           if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json';
           body = interpolatedRequest.bodyContent || '';
-        } else if (bodyType === 'text') {
+        } else if (bodyType === 'raw') {
           if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'text/plain';
           body = interpolatedRequest.bodyContent || '';
-        } else if (bodyType === 'xml') {
-          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/xml';
+        } else if (bodyType === 'graphql') {
+          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json';
           body = interpolatedRequest.bodyContent || '';
-        } else if (bodyType === 'formdata') {
+        } else if (bodyType === 'form-data') {
           const fd = new FormData();
-          for (const f of interpolatedRequest.formDataFields || []) {
+          const fields = reqAny.formDataFields || reqAny.formData || [];
+          for (const f of fields) {
             if (f.isEnabled && f.key) fd.append(f.key, f.value ?? '');
           }
           body = fd;
-        } else if (bodyType === 'urlencoded') {
+        } else if (bodyType === 'x-www-form-urlencoded') {
           const params = new URLSearchParams();
-          for (const f of interpolatedRequest.formDataFields || []) {
+          const fields = reqAny.formDataFields || reqAny.urlencoded || reqAny.formData || [];
+          for (const f of fields) {
             if (f.isEnabled && f.key) params.append(f.key, f.value ?? '');
           }
           if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/x-www-form-urlencoded';
@@ -1263,7 +1279,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Read response body
       const rawText = await directRes.text();
-      let responseBody = rawText;
+      const responseBody = rawText;
 
       // Parse response headers
       const responseHeaders: Record<string, string> = {};
@@ -1341,9 +1357,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       // 2a. Run Collection Tests Script
       if (parentCol?.postScript && responseData) {
         const colPostResult = executeScript(parentCol.postScript, {
-          environment: envVars,
+          environment: { ...envVars },
           variables: {},
-          collectionVariables: colVars,
+          collectionVariables: { ...colVars },
           request: {
             url: tab.request.url,
             method: tab.request.method,
@@ -1359,14 +1375,16 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
         testResults.push(...colPostResult.tests);
         scriptLogs.push(...colPostResult.logs);
+        applyEnvMutations(colPostResult.environmentMutations);
+        applyColMutations(colPostResult.collectionMutations);
       }
 
       // 2b. Run Request Tests Script
       if (tab.request.postScript && responseData) {
         const postResult = executeScript(tab.request.postScript, {
-          environment: envVars,
+          environment: { ...envVars },
           variables: {},
-          collectionVariables: colVars,
+          collectionVariables: { ...colVars },
           request: {
             url: tab.request.url,
             method: tab.request.method,
@@ -1383,21 +1401,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         testResults.push(...postResult.tests);
         scriptLogs.push(...postResult.logs);
-
-        // Apply environment updates from tests script
-        if (activeEnv && Object.keys(postResult.environmentMutations).length > 0) {
-          const updatedVars = [...activeEnv.variables];
-          for (const [k, val] of Object.entries(postResult.environmentMutations)) {
-            const strVal = String(val);
-            const idx = updatedVars.findIndex((v) => v.key === k);
-            if (idx >= 0) {
-              updatedVars[idx] = { ...updatedVars[idx], value: strVal };
-            } else {
-              updatedVars.push({ id: `v-${Date.now()}-${k}`, key: k, value: strVal, isSecret: false, isEnabled: true });
-            }
-          }
-          saveEnvironment({ ...activeEnv, variables: updatedVars });
-        }
+        applyEnvMutations(postResult.environmentMutations);
+        applyColMutations(postResult.collectionMutations);
       }
 
       set((state) => ({
@@ -1934,6 +1939,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   switchWorkspace: async (workspaceId: string) => {
     set({ activeWorkspaceId: workspaceId, activeFlowId: null });
     setStoredItem('internalapi_active_workspace_id', workspaceId);
+
+    try {
+      const envRes = await apiFetch(`/api/environments?workspaceId=${workspaceId}`).then((r) => r.json()).catch(() => []);
+      const environments: Environment[] = Array.isArray(envRes) ? envRes : [];
+      const currentEnvId = get().activeEnvironmentId;
+      const nextEnvId =
+        currentEnvId && environments.some((e) => e.id === currentEnvId)
+          ? currentEnvId
+          : environments[0]?.id || null;
+
+      set({ environments, activeEnvironmentId: nextEnvId });
+      setStoredItem('internalapi_environments', JSON.stringify(environments));
+      setStoredItem('internalapi_active_env_id', nextEnvId || '');
+    } catch (e) {
+      console.error('Failed to load workspace environments:', e);
+    }
+
     await get().loadCollections();
     await get().loadFlows();
     await get().refreshHistory();
@@ -2200,7 +2222,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const baseVars: Record<string, string> = {};
     if (activeEnv) {
       for (const v of activeEnv.variables) {
-        if (v.isEnabled !== false && v.key) baseVars[v.key] = v.value;
+        if (v.isEnabled !== false && v.key) baseVars[v.key] = v.value ?? '';
       }
     }
 
@@ -2358,24 +2380,28 @@ export const useAppStore = create<AppState>((set, get) => ({
             const sourceObj = runtimeVars['lastBody'];
             let val: any = undefined;
 
+            const resolvePath = (obj: any, p: string) => {
+              const parts = p.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+              let curr = obj;
+              for (const part of parts) {
+                if (curr == null) return undefined;
+                curr = curr[part];
+              }
+              return curr;
+            };
+
             if (path === 'status') {
               val = lastResponse.status;
             } else if (path?.startsWith('headers.')) {
-              const hKey = path.slice(8).toLowerCase();
-              val = (lastResponse.headers as any)?.[hKey] || (lastResponse.headers as any)?.[path.slice(8)];
+              const targetHeader = path.slice(8).toLowerCase();
+              const headersObj = (lastResponse.headers || {}) as Record<string, string>;
+              const matchedKey = Object.keys(headersObj).find((k) => k.toLowerCase() === targetHeader);
+              val = matchedKey ? headersObj[matchedKey] : undefined;
             } else if (path) {
-              const cleanPath = path.replace(/^(body|data|json)\./, '');
-              const parts = cleanPath.split('.');
-              let curr = sourceObj;
-              // If sourceObj has 'json' wrapper or 'data' wrapper
-              if (path.startsWith('json.') && sourceObj && sourceObj.json) {
-                curr = sourceObj.json;
+              val = resolvePath(sourceObj, path);
+              if (val === undefined && /^(body|data|json)\./.test(path)) {
+                val = resolvePath(sourceObj, path.replace(/^(body|data|json)\./, ''));
               }
-              for (const part of parts) {
-                if (curr == null) break;
-                curr = curr[part];
-              }
-              val = curr !== undefined ? curr : sourceObj?.[cleanPath];
             } else {
               val = sourceObj;
             }
@@ -2462,4 +2488,3 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 }));
-
