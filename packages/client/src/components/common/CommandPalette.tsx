@@ -12,7 +12,10 @@ export const CommandPalette: React.FC = () => {
     environments,
     setActiveEnvironmentId,
     collections,
+    getUserPermissions,
   } = useAppStore();
+
+  const userPerms = getUserPermissions();
 
   const [query, setQuery] = useState('');
 
@@ -96,16 +99,18 @@ export const CommandPalette: React.FC = () => {
               <Play className="w-4 h-4 text-orange-400 mr-2.5" />
               <span>Send Active Request</span>
             </button>
-            <button
-              onClick={() => {
-                clearHistory();
-                setCommandPaletteOpen(false);
-              }}
-              className="w-full flex items-center px-3 py-2 text-gray-300 hover:bg-gray-800 rounded transition-colors"
-            >
-              <Trash2 className="w-4 h-4 text-rose-400 mr-2.5" />
-              <span>Clear Request History</span>
-            </button>
+            {userPerms.canDelete && (
+              <button
+                onClick={() => {
+                  clearHistory();
+                  setCommandPaletteOpen(false);
+                }}
+                className="w-full flex items-center px-3 py-2 text-gray-300 hover:bg-gray-800 rounded transition-colors"
+              >
+                <Trash2 className="w-4 h-4 text-rose-400 mr-2.5" />
+                <span>Clear Request History</span>
+              </button>
+            )}
           </div>
 
           {/* Switch Environments */}

@@ -1478,6 +1478,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activeTab) return;
 
     if (activeTab.type === 'collection' && activeTab.collectionId) {
+      if (!get().getUserPermissions().canEdit) {
+        console.warn('Action blocked: user lacks edit permission');
+        return;
+      }
       const col = collections.find((c) => c.id === activeTab.collectionId);
       if (col) {
         await saveCollectionSettings(col);
@@ -1491,6 +1495,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const targetCol = collections.find((c) => c.id === colId);
     if (!targetCol) return;
+
+    const isExistingReq = req.id && (
+      (targetCol.requests || []).some((r) => r.id === req.id) ||
+      (targetCol.folders || []).some((f) => (f.requests || []).some((r) => r.id === req.id))
+    );
+    const requiredPerm = isExistingReq ? get().getUserPermissions().canEdit : get().getUserPermissions().canAdd;
+    if (!requiredPerm) {
+      console.warn(`Action blocked: user lacks ${isExistingReq ? 'edit' : 'add'} permission`);
+      return;
+    }
 
     const updatedCol = { ...targetCol };
     const savedReq: ApiRequestData = {
@@ -1620,6 +1634,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveEnvironment: async (env) => {
+    const existing = get().environments.some((e) => e.id === env.id);
+    const requiredPerm = existing ? get().getUserPermissions().canEdit : get().getUserPermissions().canAdd;
+    if (!requiredPerm) {
+      console.warn(`Action blocked: user lacks ${existing ? 'edit' : 'add'} permission`);
+      return;
+    }
     let saved = env;
     try {
       const res = await apiFetch('/api/environments', {
@@ -1651,6 +1671,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteEnvironment: async (id) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     await apiFetch(`/api/environments/${id}`, { method: 'DELETE' });
     const next = get().environments.filter((e) => e.id !== id);
     set({
@@ -1860,6 +1884,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   renameRequestInCollection: async (collectionId, folderId, requestId, name) => {
+    if (!get().getUserPermissions().canEdit) {
+      console.warn('Action blocked: user lacks edit permission');
+      return;
+    }
     const col = get().collections.find((c) => c.id === collectionId);
     if (!col) return;
     const updated = { ...col };
@@ -1905,6 +1933,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearHistory: async () => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     const { activeWorkspaceId } = get();
     await apiFetch(`/api/history?workspaceId=${activeWorkspaceId}`, { method: 'DELETE' });
     set({ history: [] });
@@ -1912,6 +1944,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Workspace Actions
   createWorkspace: async (name: string, description?: string) => {
+    if (!get().getUserPermissions().canAdd) {
+      console.warn('Action blocked: user lacks add permission');
+      return;
+    }
     try {
       const res = await apiFetch('/api/workspaces', {
         method: 'POST',
@@ -1962,6 +1998,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteWorkspace: async (workspaceId: string) => {
+    if (!get().getUserPermissions().canDelete) {
+      console.warn('Action blocked: user lacks delete permission');
+      return;
+    }
     try {
       await apiFetch(`/api/workspaces/${workspaceId}`, { method: 'DELETE' });
       const remaining = get().workspaces.filter((w) => w.id !== workspaceId);
@@ -2177,6 +2217,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveFlow: async (flow: Flow) => {
+    const existing = get().flows.some((f) => f.id === flow.id);
+    const requiredPerm = existing ? get().getUserPermissions().canEdit : get().getUserPermissions().canAdd;
+    if (!requiredPerm) {
+      console.warn(`Action blocked: user lacks ${existing ? 'edit' : 'add'} permission`);
+      return;
+    }
     try {
       const res = await apiFetch('/api/flows', {
         method: 'POST',

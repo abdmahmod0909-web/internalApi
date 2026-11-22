@@ -56,6 +56,7 @@ export const Navbar: React.FC = () => {
     otaInfo,
     setOtaModalOpen,
     currentUser,
+    getUserPermissions,
     serverUrl,
     setLoginModalOpen,
     setTeamModalOpen,
@@ -174,7 +175,7 @@ export const Navbar: React.FC = () => {
                           </div>
                         </div>
 
-                        {!ws.isDefault && (
+                        {!ws.isDefault && getUserPermissions().canDelete && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

@@ -36,7 +36,10 @@ export const EnvironmentModal: React.FC = () => {
     activeWorkspaceId,
     saveEnvironment,
     deleteEnvironment,
+    getUserPermissions,
   } = useAppStore();
+
+  const userPerms = getUserPermissions();
 
   const [selectedEnvId, setSelectedEnvId] = useState<string>(
     environments[0]?.id || ''
@@ -362,7 +365,7 @@ export const EnvironmentModal: React.FC = () => {
                           <span>Add Variable</span>
                         </button>
 
-                        {editingEnv.id && (
+                        {editingEnv.id && userPerms.canDelete && (
                           <button
                             onClick={() => {
                               if (confirm(`Delete environment "${editingEnv.name}"?`)) {

@@ -1202,7 +1202,7 @@ export const Sidebar: React.FC = () => {
           <div>
             <div className="flex items-center justify-between px-2 py-1 text-[11px] font-semibold text-gray-400 tracking-wider uppercase">
               <span>Recent Requests</span>
-              {history.length > 0 && (
+              {history.length > 0 && userPerms.canDelete && (
                 <button
                   onClick={() => clearHistory()}
                   className="hover:text-rose-400 text-gray-500 text-[10px]"
