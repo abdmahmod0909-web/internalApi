@@ -1191,40 +1191,147 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Deeply interpolate request fields on client so URL, params, headers, and body are fully resolved
     const interpolatedRequest: ApiRequestData = interpolateDeep(effectiveRequest, allVars);
 
-    try {
-      const res = await apiFetch('/api/proxy/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          request: interpolatedRequest,
-          environmentId: activeEnvironmentId,
-          workspaceId: activeWorkspaceId,
-          environmentVariables: envVars,
-          collectionVariables: colVars,
-        }),
-        signal: controller.signal,
-      });
+    // ── Direct-fetch helper for localhost URLs ─────────────────────────────
+    // When the target is localhost/127.0.0.1 AND we are running inside Electron
+    // (or any environment where the Node.js proxy cannot bind to that loopback),
+    // skip the backend proxy entirely and perform the request directly from the
+    // browser/renderer process — Chromium inside Electron CAN always reach the
+    // machine's own localhost.
+    const isLocalhostTarget = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?([/?#]|$)/i.test(
+      (interpolatedRequest.url || '').trim()
+    );
 
-      if (!res.ok) {
-        const errorText = await res.text();
-        let message = `Server returned HTTP ${res.status}: ${res.statusText || 'Error'}`;
-        try {
-          const parsed = JSON.parse(errorText);
-          if (parsed.error) message = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
-          else if (parsed.message) message = parsed.message;
-        } catch {
-          if (errorText.trim()) {
-            message = errorText.trim();
-          }
-        }
-        throw new Error(message);
+    const buildDirectResponse = async (): Promise<ApiResponseData> => {
+      const url = interpolatedRequest.url.trim();
+      const method = (interpolatedRequest.method || 'GET').toUpperCase();
+
+      // Build headers
+      const headers: Record<string, string> = {};
+      for (const h of interpolatedRequest.headers || []) {
+        if (h.isEnabled && h.key) headers[h.key] = h.value ?? '';
       }
 
-      let responseData: ApiResponseData;
+      // Apply auth
+      if (interpolatedRequest.auth) {
+        const auth = interpolatedRequest.auth;
+        if (auth.type === 'bearer' && auth.token) {
+          headers['Authorization'] = `Bearer ${auth.token}`;
+        } else if (auth.type === 'basic' && auth.username) {
+          headers['Authorization'] = `Basic ${btoa(`${auth.username}:${auth.password || ''}`)}`;
+        } else if (auth.type === 'apikey' && auth.key && auth.value) {
+          if (!auth.addTo || auth.addTo === 'header') headers[auth.key] = auth.value;
+        }
+      }
+
+      // Build body
+      let body: BodyInit | undefined;
+      const bodyType = interpolatedRequest.bodyType || 'none';
+      if (method !== 'GET' && method !== 'HEAD' && bodyType !== 'none') {
+        if (bodyType === 'json') {
+          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/json';
+          body = interpolatedRequest.bodyContent || '';
+        } else if (bodyType === 'text') {
+          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'text/plain';
+          body = interpolatedRequest.bodyContent || '';
+        } else if (bodyType === 'xml') {
+          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/xml';
+          body = interpolatedRequest.bodyContent || '';
+        } else if (bodyType === 'formdata') {
+          const fd = new FormData();
+          for (const f of interpolatedRequest.formDataFields || []) {
+            if (f.isEnabled && f.key) fd.append(f.key, f.value ?? '');
+          }
+          body = fd;
+        } else if (bodyType === 'urlencoded') {
+          const params = new URLSearchParams();
+          for (const f of interpolatedRequest.formDataFields || []) {
+            if (f.isEnabled && f.key) params.append(f.key, f.value ?? '');
+          }
+          if (!headers['Content-Type'] && !headers['content-type']) headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          body = params.toString();
+        }
+      }
+
+      const startTime = Date.now();
+      let directRes: Response;
       try {
-        responseData = await res.json();
-      } catch (jsonErr: any) {
-        throw new Error(`Failed to parse backend response: ${jsonErr.message}`);
+        directRes = await fetch(url, { method, headers, body, signal: controller.signal });
+      } catch (fetchErr: any) {
+        throw new Error(`Direct fetch failed: ${fetchErr.message}`);
+      }
+      const elapsed = Date.now() - startTime;
+
+      // Read response body
+      const rawText = await directRes.text();
+      let responseBody = rawText;
+
+      // Parse response headers
+      const responseHeaders: Record<string, string> = {};
+      directRes.headers.forEach((val, key) => { responseHeaders[key] = val; });
+
+      // Extract cookies from Set-Cookie (browsers restrict this, but try)
+      const cookies: Array<{ name: string; value: string }> = [];
+      const setCookie = directRes.headers.get('set-cookie');
+      if (setCookie) {
+        for (const part of setCookie.split(',')) {
+          const kv = part.trim().split(';')[0].split('=');
+          if (kv.length >= 2) cookies.push({ name: kv[0].trim(), value: kv.slice(1).join('=').trim() });
+        }
+      }
+
+      return {
+        status: directRes.status,
+        statusText: directRes.statusText || String(directRes.status),
+        headers: responseHeaders,
+        cookies,
+        body: responseBody,
+        size: new TextEncoder().encode(rawText).length,
+        time: elapsed,
+      };
+    };
+    // ──────────────────────────────────────────────────────────────────────
+
+    try {
+      let responseData: ApiResponseData;
+
+      if (isLocalhostTarget) {
+        // ✅ Direct browser fetch — bypasses the Node.js proxy completely.
+        // This fixes ECONNREFUSED on Electron desktop for all platforms.
+        responseData = await buildDirectResponse();
+      } else {
+        const res = await apiFetch('/api/proxy/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            request: interpolatedRequest,
+            environmentId: activeEnvironmentId,
+            workspaceId: activeWorkspaceId,
+            environmentVariables: envVars,
+            collectionVariables: colVars,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          let message = `Server returned HTTP ${res.status}: ${res.statusText || 'Error'}`;
+          try {
+            const parsed = JSON.parse(errorText);
+            if (parsed.error) message = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+            else if (parsed.message) message = parsed.message;
+          } catch {
+            if (errorText.trim()) {
+              message = errorText.trim();
+            }
+          }
+          throw new Error(message);
+        }
+
+        try {
+          responseData = await res.json();
+        } catch (jsonErr: any) {
+          throw new Error(`Failed to parse backend response: ${jsonErr.message}`);
+        }
       }
 
       // 2. Run Tests / Post-response Script if defined (Collection test script + Request test script)
