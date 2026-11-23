@@ -16,7 +16,9 @@ coverage
 *-linux-x64
 *.exe
 client_dist
+gemini-bridge.mjs
 packages/server/client_dist
+.vscode/tasks.json
 
 
 

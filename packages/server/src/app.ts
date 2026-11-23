@@ -27,6 +27,10 @@ import {
   checkForUpdates,
   applyOtaUpdate,
   revertOtaUpdate,
+  getOtaThemesManifest,
+  applyOtaThemePack,
+  syncOtaThemesFromRemote,
+  revertOtaThemes,
 } from './ota/ota-service.js';
 
 export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
@@ -650,7 +654,7 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   });
 
   // =========================================================================
-  // Over-The-Air (OTA) UI Hot Push Endpoints
+  // Over-The-Air (OTA) UI & Theme Hot Push Endpoints
   // =========================================================================
 
   // Get current OTA and app version status
@@ -676,6 +680,39 @@ export function buildApp(opts?: { logger?: boolean }): FastifyInstance {
   // Revert back to the bundled version that came with desktop installer
   app.post('/api/ota/revert', async () => {
     return revertOtaUpdate();
+  });
+
+  // Get active OTA & built-in themes manifest
+  app.get('/api/ota/themes', async () => {
+    return getOtaThemesManifest();
+  });
+
+  // Sync OTA themes from GitHub Releases or custom manifest URL
+  app.post('/api/ota/themes/sync', async (req) => {
+    const body = (req.body || {}) as { repo?: string; manifestUrl?: string };
+    return syncOtaThemesFromRemote(body.repo, body.manifestUrl);
+  });
+
+  // Hot-push / install a theme pack JSON directly over OTA
+  app.post('/api/ota/themes/apply', async (req) => {
+    const body = req.body as { version?: string; source?: string; themes?: any[] };
+    if (!body?.themes || !Array.isArray(body.themes)) {
+      throw app.httpErrors.badRequest('themes array is required');
+    }
+    try {
+      return applyOtaThemePack({
+        version: body.version,
+        source: body.source || 'ota-hot-push',
+        themes: body.themes,
+      });
+    } catch (err: any) {
+      throw app.httpErrors.badRequest(err.message || 'Failed to apply OTA theme pack');
+    }
+  });
+
+  // Revert OTA theme overrides back to built-in defaults
+  app.post('/api/ota/themes/revert', async () => {
+    return revertOtaThemes();
   });
 
   return app;

@@ -22,6 +22,452 @@ import type {
 import { executeScript, interpolateVariables, interpolateDeep, resolveUserPermissions } from '@internalapi/shared';
 import { downloadCollectionAsJson } from '../utils/export-collection.js';
 
+export type ThemeId =
+  | 'dark'
+  | 'midnight'
+  | 'light'
+  | 'nord'
+  | 'dracula'
+  | 'emerald'
+  | 'cyberpunk'
+  | 'solarized'
+  | (string & {});
+
+export interface ThemeTokens {
+  bgBase: string;
+  bgSurface: string;
+  bgElevated: string;
+  bgHover: string;
+  borderSubtle: string;
+  borderStrong: string;
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  accent: string;
+  accentHover: string;
+  accentSoft: string;
+  accentText: string;
+  success: string;
+  warning: string;
+  danger: string;
+  scrollbarThumb: string;
+  scrollbarTrack: string;
+}
+
+export interface ThemeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  category: 'dark' | 'light';
+  isOta?: boolean;
+  version?: string;
+  badge?: string;
+  colors: ThemeTokens;
+}
+
+export const BUILT_IN_THEMES: ThemeDefinition[] = [
+  {
+    id: 'dark',
+    name: 'Obsidian Carbon',
+    description: 'Refined deep obsidian dark mode with crisp borders and warm amber-orange accents.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'Enhanced',
+    colors: {
+      bgBase: '#090b10',
+      bgSurface: '#0f131a',
+      bgElevated: '#161b26',
+      bgHover: '#1d2433',
+      borderSubtle: '#1e2636',
+      borderStrong: '#2e3a52',
+      textPrimary: '#f1f5f9',
+      textSecondary: '#cbd5e1',
+      textMuted: '#64748b',
+      accent: '#f97316',
+      accentHover: '#ea580c',
+      accentSoft: 'rgba(249, 115, 22, 0.14)',
+      accentText: '#fb923c',
+      success: '#10b981',
+      warning: '#f59e0b',
+      danger: '#f43f5e',
+      scrollbarThumb: '#283244',
+      scrollbarTrack: '#0b0e14',
+    },
+  },
+  {
+    id: 'midnight',
+    name: 'Deep Midnight',
+    description: 'Abyssal indigo-slate workspace tuned for late-night API debugging with electric sky highlights.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'Enhanced',
+    colors: {
+      bgBase: '#060914',
+      bgSurface: '#0b1121',
+      bgElevated: '#121b33',
+      bgHover: '#192545',
+      borderSubtle: '#1c294a',
+      borderStrong: '#2b3e6e',
+      textPrimary: '#f8fafc',
+      textSecondary: '#cbd5e1',
+      textMuted: '#6b7fa8',
+      accent: '#38bdf8',
+      accentHover: '#0284c7',
+      accentSoft: 'rgba(56, 189, 248, 0.15)',
+      accentText: '#7dd3fc',
+      success: '#34d399',
+      warning: '#fbbf24',
+      danger: '#fb7185',
+      scrollbarThumb: '#23345c',
+      scrollbarTrack: '#080c1a',
+    },
+  },
+  {
+    id: 'light',
+    name: 'Daylight Studio',
+    description: 'High-contrast alabaster and pure white surfaces with sharp slate typography.',
+    category: 'light',
+    version: '1.2.0',
+    badge: 'Enhanced',
+    colors: {
+      bgBase: '#f1f5f9',
+      bgSurface: '#ffffff',
+      bgElevated: '#f8fafc',
+      bgHover: '#e2e8f0',
+      borderSubtle: '#e2e8f0',
+      borderStrong: '#cbd5e1',
+      textPrimary: '#0f172a',
+      textSecondary: '#334155',
+      textMuted: '#64748b',
+      accent: '#ea580c',
+      accentHover: '#c2410c',
+      accentSoft: 'rgba(234, 88, 12, 0.12)',
+      accentText: '#c2410c',
+      success: '#059669',
+      warning: '#d97706',
+      danger: '#e11d48',
+      scrollbarThumb: '#cbd5e1',
+      scrollbarTrack: '#f1f5f9',
+    },
+  },
+  {
+    id: 'nord',
+    name: 'Arctic Nord',
+    description: 'Cool Scandinavian polar slate palette with calming frost cyan accents.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'New',
+    colors: {
+      bgBase: '#242933',
+      bgSurface: '#2e3440',
+      bgElevated: '#3b4252',
+      bgHover: '#434c5e',
+      borderSubtle: '#434c5e',
+      borderStrong: '#4c566a',
+      textPrimary: '#eceff4',
+      textSecondary: '#d8dee9',
+      textMuted: '#81a1c1',
+      accent: '#88c0d0',
+      accentHover: '#81a1c1',
+      accentSoft: 'rgba(136, 192, 208, 0.16)',
+      accentText: '#8fbcbb',
+      success: '#a3be8c',
+      warning: '#ebcb8b',
+      danger: '#bf616a',
+      scrollbarThumb: '#4c566a',
+      scrollbarTrack: '#242933',
+    },
+  },
+  {
+    id: 'dracula',
+    name: 'Dracula Pro',
+    description: 'Rich velvet charcoal surfaces paired with vivid violet and magenta highlights.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'New',
+    colors: {
+      bgBase: '#181922',
+      bgSurface: '#21222c',
+      bgElevated: '#282a36',
+      bgHover: '#343746',
+      borderSubtle: '#36394a',
+      borderStrong: '#4c5069',
+      textPrimary: '#f8f8f2',
+      textSecondary: '#d6d8e8',
+      textMuted: '#7e86a8',
+      accent: '#bd93f9',
+      accentHover: '#a875f5',
+      accentSoft: 'rgba(189, 147, 249, 0.16)',
+      accentText: '#d6bcfa',
+      success: '#50fa7b',
+      warning: '#f1fa8c',
+      danger: '#ff5555',
+      scrollbarThumb: '#44475a',
+      scrollbarTrack: '#181922',
+    },
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald Matrix',
+    description: 'Deep forest-obsidian console aesthetic with crisp mint-emerald telemetry accents.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'New',
+    colors: {
+      bgBase: '#060d0b',
+      bgSurface: '#0b1613',
+      bgElevated: '#11221d',
+      bgHover: '#172e27',
+      borderSubtle: '#19332b',
+      borderStrong: '#244a3f',
+      textPrimary: '#ecfdf5',
+      textSecondary: '#a7f3d0',
+      textMuted: '#5e8c7d',
+      accent: '#10b981',
+      accentHover: '#059669',
+      accentSoft: 'rgba(16, 185, 129, 0.15)',
+      accentText: '#34d399',
+      success: '#10b981',
+      warning: '#f59e0b',
+      danger: '#f43f5e',
+      scrollbarThumb: '#1f4036',
+      scrollbarTrack: '#060d0b',
+    },
+  },
+  {
+    id: 'cyberpunk',
+    name: 'Neon Synth',
+    description: 'High-energy ultraviolet night theme with electric rose-magenta accents.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'New',
+    colors: {
+      bgBase: '#0b0716',
+      bgSurface: '#130d24',
+      bgElevated: '#1c1433',
+      bgHover: '#261b45',
+      borderSubtle: '#2c1f52',
+      borderStrong: '#432f7a',
+      textPrimary: '#fdf2f8',
+      textSecondary: '#e9d5ff',
+      textMuted: '#8b74b8',
+      accent: '#f43f5e',
+      accentHover: '#e11d48',
+      accentSoft: 'rgba(244, 63, 94, 0.16)',
+      accentText: '#fb7185',
+      success: '#2dd4bf',
+      warning: '#facc15',
+      danger: '#f43f5e',
+      scrollbarThumb: '#382766',
+      scrollbarTrack: '#0b0716',
+    },
+  },
+  {
+    id: 'solarized',
+    name: 'Solarized Dusk',
+    description: 'Precision-engineered warm teal-slate palette designed to eliminate eye fatigue.',
+    category: 'dark',
+    version: '1.2.0',
+    badge: 'New',
+    colors: {
+      bgBase: '#00212b',
+      bgSurface: '#002b36',
+      bgElevated: '#073642',
+      bgHover: '#0d4452',
+      borderSubtle: '#0e4959',
+      borderStrong: '#1a6175',
+      textPrimary: '#fdf6e3',
+      textSecondary: '#93a1a1',
+      textMuted: '#657b83',
+      accent: '#2aa198',
+      accentHover: '#21867e',
+      accentSoft: 'rgba(42, 161, 152, 0.16)',
+      accentText: '#4fd1c5',
+      success: '#859900',
+      warning: '#b58900',
+      danger: '#dc322f',
+      scrollbarThumb: '#145363',
+      scrollbarTrack: '#00212b',
+    },
+  },
+];
+
+/**
+ * Injects live CSS variables and scoped theme rules into the document so all
+ * panels, borders, accents, scrollbars, and light/dark surfaces update immediately.
+ */
+export function applyDynamicThemeStyles(themeDef: ThemeDefinition): void {
+  if (typeof document === 'undefined') return;
+
+  const root = document.documentElement;
+  const c = themeDef.colors;
+  const isLight = themeDef.category === 'light';
+
+  root.className = `theme-${themeDef.id}`;
+  root.setAttribute('data-theme', themeDef.id);
+  root.style.colorScheme = isLight ? 'light' : 'dark';
+
+  root.style.setProperty('--ia-bg-base', c.bgBase);
+  root.style.setProperty('--ia-bg-surface', c.bgSurface);
+  root.style.setProperty('--ia-bg-elevated', c.bgElevated);
+  root.style.setProperty('--ia-bg-hover', c.bgHover);
+  root.style.setProperty('--ia-border-subtle', c.borderSubtle);
+  root.style.setProperty('--ia-border-strong', c.borderStrong);
+  root.style.setProperty('--ia-text-primary', c.textPrimary);
+  root.style.setProperty('--ia-text-secondary', c.textSecondary);
+  root.style.setProperty('--ia-text-muted', c.textMuted);
+  root.style.setProperty('--ia-accent', c.accent);
+  root.style.setProperty('--ia-accent-hover', c.accentHover);
+  root.style.setProperty('--ia-accent-soft', c.accentSoft);
+  root.style.setProperty('--ia-accent-text', c.accentText);
+
+  const styleId = 'internalapi-dynamic-theme-engine';
+  let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = styleId;
+    document.head.appendChild(styleEl);
+  }
+
+  styleEl.textContent = `
+    :root, html.theme-${themeDef.id} {
+      background-color: ${c.bgBase};
+      color: ${c.textPrimary};
+    }
+
+    body {
+      background-color: ${c.bgBase} !important;
+      color: ${c.textPrimary} !important;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+
+    /* Core Surface Elevation Overrides */
+    .bg-gray-950,
+    .bg-gray-950\\/95,
+    .bg-gray-950\\/90,
+    .bg-gray-950\\/80,
+    .bg-gray-950\\/60,
+    .bg-gray-950\\/40 {
+      background-color: ${c.bgBase} !important;
+    }
+
+    .bg-gray-900,
+    .bg-gray-900\\/95,
+    .bg-gray-900\\/90,
+    .bg-gray-900\\/80,
+    .bg-gray-900\\/60 {
+      background-color: ${c.bgSurface} !important;
+    }
+
+    .bg-gray-800,
+    .bg-gray-800\\/80,
+    .bg-gray-800\\/60,
+    .bg-gray-800\\/50 {
+      background-color: ${c.bgElevated} !important;
+    }
+
+    .hover\\:bg-gray-800:hover,
+    .hover\\:bg-gray-800\\/60:hover,
+    .hover\\:bg-gray-700:hover {
+      background-color: ${c.bgHover} !important;
+    }
+
+    /* Border Refinement */
+    .border-gray-800,
+    .border-gray-800\\/80,
+    .border-gray-800\\/60,
+    .divide-gray-800 > :not([hidden]) ~ :not([hidden]) {
+      border-color: ${c.borderSubtle} !important;
+    }
+
+    .border-gray-700,
+    .border-gray-700\\/80,
+    .hover\\:border-gray-700:hover {
+      border-color: ${c.borderStrong} !important;
+    }
+
+    /* Typography Contrast */
+    .text-gray-100,
+    .text-gray-200 {
+      color: ${c.textPrimary} !important;
+    }
+
+    .text-gray-300 {
+      color: ${c.textSecondary} !important;
+    }
+
+    .text-gray-400,
+    .text-gray-500 {
+      color: ${c.textMuted} !important;
+    }
+
+    ${
+      isLight
+        ? `
+    .text-white {
+      color: #ffffff;
+    }
+    .hover\\:text-white:hover,
+    .hover\\:text-gray-200:hover {
+      color: ${c.textPrimary} !important;
+    }
+    input, textarea, select {
+      color: ${c.textPrimary};
+    }
+    `
+        : ''
+    }
+
+    /* Dynamic Accent Tokens */
+    .bg-orange-600 {
+      background-color: ${c.accent} !important;
+    }
+    .hover\\:bg-orange-500:hover,
+    .hover\\:bg-orange-600:hover {
+      background-color: ${c.accentHover} !important;
+    }
+    .bg-orange-500 {
+      background-color: ${c.accent} !important;
+    }
+    .bg-orange-500\\/10,
+    .bg-orange-500\\/15,
+    .bg-orange-500\\/20 {
+      background-color: ${c.accentSoft} !important;
+    }
+    .text-orange-400,
+    .text-orange-500 {
+      color: ${c.accentText} !important;
+    }
+    .border-orange-500,
+    .border-orange-500\\/30,
+    .border-orange-500\\/20,
+    .focus\\:border-orange-500:focus {
+      border-color: ${c.accent} !important;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: ${c.scrollbarTrack};
+    }
+    ::-webkit-scrollbar-thumb {
+      background: ${c.scrollbarThumb};
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: ${c.borderStrong};
+    }
+
+    ::selection {
+      background-color: ${c.accentSoft};
+      color: ${c.textPrimary};
+    }
+  `;
+}
+
 export interface TabItem {
   id: string;
   name: string;
@@ -46,6 +492,9 @@ export interface OtaInfo {
   assetName?: string;
   assetUrl?: string;
   assetSize?: number;
+  themeManifestUrl?: string;
+  themePackVersion?: string;
+  themeCount?: number;
   message?: string;
 }
 
@@ -91,7 +540,12 @@ interface AppState {
   isCommandPaletteOpen: boolean;
   isEnvModalOpen: boolean;
   isImportModalOpen: boolean;
-  theme: 'dark' | 'midnight' | 'light';
+  theme: ThemeId;
+  availableThemes: ThemeDefinition[];
+  otaThemeVersion: string;
+  hasOtaThemes: boolean;
+  isSyncingThemes: boolean;
+  otaModalTab: 'updates' | 'themes';
   splitRatio: number;
   layout: 'horizontal' | 'vertical';
 
@@ -106,10 +560,15 @@ interface AppState {
   otaInfo: OtaInfo | null;
   isOtaModalOpen: boolean;
   isApplyingOta: boolean;
-  setOtaModalOpen: (open: boolean) => void;
+  setOtaModalOpen: (open: boolean, defaultTab?: 'updates' | 'themes') => void;
+  setOtaModalTab: (tab: 'updates' | 'themes') => void;
   checkOtaUpdates: () => Promise<void>;
   applyOtaUpdateAction: () => Promise<boolean>;
   revertOtaAction: () => Promise<void>;
+  fetchOtaThemes: () => Promise<void>;
+  syncOtaThemesAction: (manifestUrl?: string) => Promise<{ synced: boolean; message?: string }>;
+  installOtaThemePackAction: (packJson: { version?: string; themes: any[] }) => Promise<{ success: boolean; error?: string }>;
+  revertOtaThemesAction: () => Promise<void>;
 
   // User Authentication & Cloud Sync
   currentUser: User | null;
@@ -148,7 +607,7 @@ interface AppState {
   setExportModalOpen: (open: boolean) => void;
   exportCollectionAction: (collectionId: string) => void;
   setWorkspaceModalOpen: (open: boolean) => void;
-  setTheme: (theme: 'dark' | 'midnight' | 'light') => void;
+  setTheme: (theme: ThemeId) => void;
   setSplitRatio: (ratio: number) => void;
   setLayout: (layout: 'horizontal' | 'vertical') => void;
   setActiveView: (view: 'requests' | 'flows') => void;
@@ -214,6 +673,24 @@ function setStoredItem(key: string, value: string): void {
       window.localStorage.setItem(key, value);
     }
   } catch {}
+}
+
+function getInitialThemesList(): ThemeDefinition[] {
+  const saved = getStoredItem('internalapi_ota_themes', '');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const merged = new Map<string, ThemeDefinition>();
+        for (const t of BUILT_IN_THEMES) merged.set(t.id, t);
+        for (const t of parsed) {
+          if (t && t.id && t.colors) merged.set(t.id, t);
+        }
+        return Array.from(merged.values());
+      }
+    } catch {}
+  }
+  return BUILT_IN_THEMES;
 }
 
 export function getApiBaseUrl(): string {
@@ -324,6 +801,14 @@ function getInitialEnvironments(): Environment[] {
 
 const initialTabs = getInitialTabs();
 const initialActiveTabId = getStoredItem('internalapi_active_tab_id', initialTabs[0]?.id || 'tab-1');
+const initialThemes = getInitialThemesList();
+const initialThemeId = getStoredItem('internalapi_theme', 'dark') as ThemeId;
+
+// Apply initial theme immediately to avoid flash of unstyled content
+const initialThemeDef = initialThemes.find((t) => t.id === initialThemeId) || initialThemes[0];
+if (initialThemeDef) {
+  applyDynamicThemeStyles(initialThemeDef);
+}
 
 // In-flight request abort controllers per tab
 const inFlightControllers = new Map<string, AbortController>();
@@ -351,7 +836,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   isCommandPaletteOpen: false,
   isEnvModalOpen: false,
   isImportModalOpen: false,
-  theme: (getStoredItem('internalapi_theme', 'dark') as any),
+  theme: initialThemeId,
+  availableThemes: initialThemes,
+  otaThemeVersion: getStoredItem('internalapi_ota_theme_version', '1.2.0'),
+  hasOtaThemes: getStoredItem('internalapi_has_ota_themes', 'false') === 'true',
+  isSyncingThemes: false,
+  otaModalTab: 'updates',
   splitRatio: parseFloat(getStoredItem('internalapi_split_ratio', '50')),
   layout: (getStoredItem('internalapi_layout', 'horizontal') as any),
   closeUnsavedPreference: ((getStoredItem('internalapi_close_unsaved_pref', 'ask') as any) || 'ask'),
@@ -371,7 +861,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   otaInfo: null,
   isOtaModalOpen: false,
   isApplyingOta: false,
-  setOtaModalOpen: (open) => set({ isOtaModalOpen: open }),
+  setOtaModalOpen: (open, defaultTab) =>
+    set((state) => ({
+      isOtaModalOpen: open,
+      otaModalTab: defaultTab || state.otaModalTab,
+    })),
+  setOtaModalTab: (tab) => set({ otaModalTab: tab }),
 
   // User Authentication & Cloud Sync
   currentUser: getInitialUser(),
@@ -611,7 +1106,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   checkOtaUpdates: async () => {
     try {
-      const res = await fetch('/api/ota/check');
+      const res = await apiFetch('/api/ota/check');
       if (res.ok) {
         const data = await res.json();
         set({ otaInfo: data });
@@ -624,7 +1119,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!ota?.assetUrl || !ota?.latestVersion) return false;
     set({ isApplyingOta: true });
     try {
-      const res = await fetch('/api/ota/apply', {
+      const res = await apiFetch('/api/ota/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -634,6 +1129,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to apply update');
+      await get().fetchOtaThemes();
       return true;
     } catch (err: any) {
       alert(`Update failed: ${err.message}`);
@@ -646,10 +1142,109 @@ export const useAppStore = create<AppState>((set, get) => ({
   revertOtaAction: async () => {
     if (!confirm('Revert UI to the factory bundled version?')) return;
     try {
-      await fetch('/api/ota/revert', { method: 'POST' });
+      await apiFetch('/api/ota/revert', { method: 'POST' });
       window.location.reload();
     } catch (err: any) {
       alert(`Revert failed: ${err.message}`);
+    }
+  },
+
+  fetchOtaThemes: async () => {
+    try {
+      const res = await apiFetch('/api/ota/themes');
+      if (!res.ok) return;
+      const manifest = await res.json();
+      if (manifest && Array.isArray(manifest.themes) && manifest.themes.length > 0) {
+        const mergedMap = new Map<string, ThemeDefinition>();
+        for (const t of BUILT_IN_THEMES) mergedMap.set(t.id, t);
+        for (const t of manifest.themes) {
+          if (t && t.id && t.colors) mergedMap.set(t.id, t);
+        }
+        const mergedList = Array.from(mergedMap.values());
+        setStoredItem('internalapi_ota_themes', JSON.stringify(mergedList));
+        setStoredItem('internalapi_ota_theme_version', manifest.version || '1.2.0');
+        setStoredItem('internalapi_has_ota_themes', String(Boolean(manifest.hasOtaThemes)));
+
+        const currentThemeId = get().theme;
+        const activeThemeDef = mergedList.find((t) => t.id === currentThemeId) || mergedList[0];
+        if (activeThemeDef) {
+          applyDynamicThemeStyles(activeThemeDef);
+        }
+
+        set({
+          availableThemes: mergedList,
+          otaThemeVersion: manifest.version || '1.2.0',
+          hasOtaThemes: Boolean(manifest.hasOtaThemes),
+        });
+      }
+    } catch (_) {}
+  },
+
+  syncOtaThemesAction: async (manifestUrl) => {
+    set({ isSyncingThemes: true });
+    try {
+      const res = await apiFetch('/api/ota/themes/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(manifestUrl ? { manifestUrl } : {}),
+      });
+      const data = await res.json();
+      await get().fetchOtaThemes();
+      return {
+        synced: Boolean(data.synced),
+        message: data.message,
+      };
+    } catch (err: any) {
+      return {
+        synced: false,
+        message: err.message || 'Failed to sync OTA themes',
+      };
+    } finally {
+      set({ isSyncingThemes: false });
+    }
+  },
+
+  installOtaThemePackAction: async (packJson) => {
+    set({ isSyncingThemes: true });
+    try {
+      const res = await apiFetch('/api/ota/themes/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(packJson),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.message || data.error || 'Invalid OTA theme pack' };
+      }
+      await get().fetchOtaThemes();
+      // Auto-preview the first newly pushed theme
+      if (Array.isArray(packJson.themes) && packJson.themes[0]?.id) {
+        const pushedId = String(packJson.themes[0].id).trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+        get().setTheme(pushedId);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Failed to install OTA theme pack' };
+    } finally {
+      set({ isSyncingThemes: false });
+    }
+  },
+
+  revertOtaThemesAction: async () => {
+    try {
+      await apiFetch('/api/ota/themes/revert', { method: 'POST' });
+      setStoredItem('internalapi_ota_themes', '');
+      setStoredItem('internalapi_has_ota_themes', 'false');
+      const fallbackTheme = BUILT_IN_THEMES.find((t) => t.id === get().theme) || BUILT_IN_THEMES[0];
+      applyDynamicThemeStyles(fallbackTheme);
+      set({
+        availableThemes: BUILT_IN_THEMES,
+        hasOtaThemes: false,
+        otaThemeVersion: '1.2.0',
+        theme: fallbackTheme.id,
+      });
+    } catch (err: any) {
+      alert(`Failed to revert OTA themes: ${err.message}`);
     }
   },
 
@@ -669,7 +1264,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveFlowId: (id) => set({ activeFlowId: id, activeView: id ? 'flows' : get().activeView }),
   setTheme: (theme) => {
     setStoredItem('internalapi_theme', theme);
-    if (typeof document !== 'undefined') {
+    const allThemes = get().availableThemes;
+    const targetDef = allThemes.find((t) => t.id === theme) || BUILT_IN_THEMES.find((t) => t.id === theme);
+    if (targetDef) {
+      applyDynamicThemeStyles(targetDef);
+    } else if (typeof document !== 'undefined') {
       document.documentElement.className = `theme-${theme}`;
     }
     set({ theme });
@@ -685,6 +1284,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadInitialData: async () => {
     try {
+      // Load OTA themes early so even login screen gets latest OTA theme tokens
+      get().fetchOtaThemes();
+
       const token = getAuthToken();
       if (!token) {
         set({
@@ -749,7 +1351,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       setStoredItem('internalapi_collections', JSON.stringify(collections));
       setStoredItem('internalapi_environments', JSON.stringify(environments));
 
-      // Trigger background OTA check for lightweight UI updates
+      // Trigger background OTA check for lightweight UI & theme updates
       get().checkOtaUpdates();
     } catch (e) {
       console.error('Failed to load initial data:', e);
@@ -1195,27 +1797,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Deeply interpolate request fields on client so URL, params, headers, and body are fully resolved
     const interpolatedRequest: ApiRequestData = interpolateDeep(effectiveRequest, allVars);
 
-    // ── Direct-fetch helper for localhost URLs ─────────────────────────────
-    // When the target is localhost/127.0.0.1 AND we are running inside Electron
-    // (or any environment where the Node.js proxy cannot bind to that loopback),
-    // skip the backend proxy entirely and perform the request directly from the
-    // browser/renderer process — Chromium inside Electron CAN always reach the
-    // machine's own localhost.
     const isLocalhostTarget = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?([/?#]|$)/i.test(
       (interpolatedRequest.url || '').trim()
     );
 
-   const buildDirectResponse = async (): Promise<ApiResponseData> => {
+    const buildDirectResponse = async (): Promise<ApiResponseData> => {
       const url = interpolatedRequest.url.trim();
       const method = (interpolatedRequest.method || 'GET').toUpperCase();
 
-      // Build headers
       const headers: Record<string, string> = {};
       for (const h of interpolatedRequest.headers || []) {
         if (h.isEnabled && h.key) headers[h.key] = h.value ?? '';
       }
 
-      // Apply auth (supports both flat and nested AuthConfig shapes)
       if (interpolatedRequest.auth) {
         const auth = interpolatedRequest.auth as any;
         if (auth.type === 'bearer') {
@@ -1236,7 +1830,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // Build body
       let body: BodyInit | undefined;
       const bodyType = interpolatedRequest.bodyType || 'none';
       const reqAny = interpolatedRequest as any;
@@ -1277,15 +1870,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       const elapsed = Date.now() - startTime;
 
-      // Read response body
       const rawText = await directRes.text();
       const responseBody = rawText;
 
-      // Parse response headers
       const responseHeaders: Record<string, string> = {};
       directRes.headers.forEach((val, key) => { responseHeaders[key] = val; });
 
-      // Extract cookies from Set-Cookie (browsers restrict this, but try)
       const cookies: Array<{ name: string; value: string }> = [];
       const setCookie = directRes.headers.get('set-cookie');
       if (setCookie) {
@@ -1305,14 +1895,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         time: elapsed,
       };
     };
-    // ──────────────────────────────────────────────────────────────────────
 
     try {
       let responseData: ApiResponseData;
 
       if (isLocalhostTarget) {
-        // ✅ Direct browser fetch — bypasses the Node.js proxy completely.
-        // This fixes ECONNREFUSED on Electron desktop for all platforms.
         responseData = await buildDirectResponse();
       } else {
         const res = await apiFetch('/api/proxy/send', {
@@ -1350,11 +1937,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      // 2. Run Tests / Post-response Script if defined (Collection test script + Request test script)
       let testResults: TestResultItem[] = [];
       let scriptLogs: string[] = [];
 
-      // 2a. Run Collection Tests Script
       if (parentCol?.postScript && responseData) {
         const colPostResult = executeScript(parentCol.postScript, {
           environment: { ...envVars },
@@ -1379,7 +1964,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         applyColMutations(colPostResult.collectionMutations);
       }
 
-      // 2b. Run Request Tests Script
       if (tab.request.postScript && responseData) {
         const postResult = executeScript(tab.request.postScript, {
           environment: { ...envVars },
@@ -1419,7 +2003,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         ),
       }));
 
-      // Refresh history list
       get().refreshHistory();
     } catch (err: any) {
       if (err.name === 'AbortError' || controller.signal.aborted) {
@@ -1534,7 +2117,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       updatedCol.requests = next;
     }
 
-    // Save to backend
     const envParam = get().activeEnvironmentId ? `?environmentId=${encodeURIComponent(get().activeEnvironmentId!)}` : '';
     const res = await apiFetch(`/api/collections${envParam}`, {
       method: 'POST',
@@ -1664,7 +2246,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ environments: next });
     setStoredItem('internalapi_environments', JSON.stringify(next));
 
-    // Reload collections for active environment in case DB config was updated
     if (get().activeEnvironmentId === saved.id || !get().activeEnvironmentId) {
       get().loadCollections();
     }
@@ -1914,7 +2495,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const saved = await res.json();
     const next = get().collections.map((c) => (c.id === collectionId ? saved : c));
 
-    // Also update open tabs matching this request
     const nextTabs = get().tabs.map((t) =>
       t.request.id === requestId ? { ...t, name, request: { ...t.request, name } } : t
     );
@@ -2156,7 +2736,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       ];
     } else {
-      // Default Blank Flow
       initialNodes = [
         {
           id: `node-${Date.now()}-1`,
@@ -2263,7 +2842,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     const flow = flows.find((f) => f.id === flowId);
     if (!flow || !flow.nodes || flow.nodes.length === 0) return;
 
-    // Load active environment variables
     const activeEnv = environments.find((e) => e.id === activeEnvironmentId);
     const baseVars: Record<string, string> = {};
     if (activeEnv) {
